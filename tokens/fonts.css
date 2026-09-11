@@ -1,0 +1,8 @@
+/* The Coop webfonts — approved by the brand owner.
+   Matched to the printed menu + vehicle wrap:
+   - Luckiest Guy  -> menu headline caps ("THE BREAKFAST SANDWICH", "ENTREES")
+   - Bowlby One    -> bubble-letter display, nearest match to the COOP wordmark
+                      (the real wordmark is always the logo PNG, never type)
+   - Quicksand     -> item descriptions / body copy
+   - Roboto Mono   -> tickets, order numbers, receipts */
+@import url("https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Bowlby+One&family=Quicksand:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap");

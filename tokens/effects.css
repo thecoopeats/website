@@ -1,0 +1,24 @@
+:root{
+  /* Corners: the brand is bubbly. Nothing is square except the menu board. */
+  --radius-sm:6px;
+  --radius-md:12px;
+  --radius-lg:20px;
+  --radius-xl:32px;
+  --radius-pill:999px;
+
+  /* Outlines: the single most important brand device — every mark on the
+     truck and menu is a shape with a heavy black keyline. */
+  --stroke-1:2px;
+  --stroke-2:3px;
+  --stroke-3:5px;
+  --outline-hard:var(--stroke-2) solid var(--coop-black);
+
+  /* Sticker shadow: hard offset, no blur. Never a soft drop shadow. */
+  --shadow-sticker:4px 4px 0 var(--coop-black);
+  --shadow-sticker-lg:7px 7px 0 var(--coop-black);
+  --shadow-sticker-press:2px 2px 0 var(--coop-black);
+  --shadow-card:0 2px 0 var(--gray-200);
+  --shadow-lift:0 10px 24px rgba(10,10,10,.18);
+
+  --dash-rule:repeating-linear-gradient(90deg,var(--coop-red) 0 18px,transparent 18px 32px);
+}

@@ -1,0 +1,49 @@
+:root{
+  /* Base palette — three colors, no compromise */
+  --coop-red:#C8252B;
+  --coop-red-dark:#9C1A1F;
+  --coop-red-bright:#E4252C;
+  --coop-black:#0A0A0A;
+  --coop-ink:#141414;
+  --coop-white:#FFFFFF;
+
+  /* Neutrals — paper + char, warm-shifted so white never reads clinical */
+  --gray-50:#F7F5F3;
+  --gray-100:#EDEAE6;
+  --gray-200:#D8D3CD;
+  --gray-400:#9A938B;
+  --gray-600:#5C5852;
+  --gray-800:#2A2724;
+
+  /* Sauce colors — sampled from the DIPPED strip on the menu board.
+     Use on black only; they are signage colors, never body text on white. */
+  --sauce-honey-bbq:#4CAF3E;
+  --sauce-garlic-parm:#C6D93A;
+  --sauce-spicy-maple:#FFD400;
+  --sauce-sweet-thai:#F7941D;
+  --sauce-buffalo:#F15A24;
+  --sauce-nashville:#ED1C24;
+
+  /* Semantic aliases */
+  --surface-page:var(--coop-white);
+  --surface-board:var(--coop-black);
+  --surface-card:var(--coop-white);
+  --surface-sunk:var(--gray-50);
+  --surface-accent:var(--coop-red);
+
+  --text-body:var(--coop-ink);
+  --text-muted:var(--gray-600);
+  --text-heading:var(--coop-black);
+  --text-accent:var(--coop-red);
+  --text-on-red:var(--coop-white);
+  --text-on-black:var(--coop-white);
+
+  --border-hard:var(--coop-black);
+  --border-soft:var(--gray-200);
+  --border-dashed:var(--coop-red);
+
+  --focus-ring:var(--coop-red-bright);
+  --heat-1:var(--sauce-spicy-maple);
+  --heat-2:var(--sauce-buffalo);
+  --heat-3:var(--sauce-nashville);
+}

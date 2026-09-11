@@ -145,7 +145,7 @@ function ContactForm() {
     <section id="contact" style={{ maxWidth: 'var(--max-content)', margin: '0 auto', padding: 'var(--gutter-section) var(--gutter-page)' }}>
       <h2 style={{ ...POSTER, fontSize: 'var(--text-2xl)', color: 'var(--coop-red)', margin: '0 0 var(--space-2)' }}>Say hey</h2>
       <p style={{ ...BODY, fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 var(--space-5)', maxWidth: '52ch' }}>
-        Questions, feedback, or just want to tell us where to park next — drop a line and a real person replies from thecoopeats@gmail.com.
+        Questions, feedback, or just want to tell us where to park next — drop a line and a real person will reply shortly.
       </p>
       <Card sticker style={{ maxWidth: 560 }}>
         {status === 'sent' ? (

@@ -109,6 +109,83 @@ function MascotBanner() {
   );
 }
 
+function ContactForm() {
+  const [name, setName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [message, setMessage] = React.useState('');
+  const [honey, setHoney] = React.useState('');
+  const [status, setStatus] = React.useState('idle'); // idle | sending | sent | error
+  const [focus, setFocus] = React.useState(false);
+
+  const valid = name.trim() && email.includes('@') && message.trim();
+
+  const submit = async e => {
+    e.preventDefault();
+    if (!valid || status === 'sending' || honey) return;
+    setStatus('sending');
+    try {
+      const res = await fetch('https://formsubmit.co/ajax/thecoopeats@gmail.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          name, email, message,
+          _subject: 'New message from thecoopeats.com',
+          _replyto: email,
+          _template: 'table'
+        })
+      });
+      if (!res.ok) throw new Error('send failed');
+      setStatus('sent');
+    } catch (err) {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <section id="contact" style={{ maxWidth: 'var(--max-content)', margin: '0 auto', padding: 'var(--gutter-section) var(--gutter-page)' }}>
+      <h2 style={{ ...POSTER, fontSize: 'var(--text-2xl)', color: 'var(--coop-red)', margin: '0 0 var(--space-2)' }}>Say hey</h2>
+      <p style={{ ...BODY, fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 var(--space-5)', maxWidth: '52ch' }}>
+        Questions, feedback, or just want to tell us where to park next — drop a line and a real person replies from thecoopeats@gmail.com.
+      </p>
+      <Card sticker style={{ maxWidth: 560 }}>
+        {status === 'sent' ? (
+          <Toast tone="dark" title="Message sent" message={`Thanks — we'll reply to ${email} soon.`} />
+        ) : (
+          <form onSubmit={submit} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+            <input type="text" value={honey} onChange={e => setHoney(e.target.value)} tabIndex={-1} autoComplete="off"
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} aria-hidden="true" />
+            <Input label="Name" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} required />
+            <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+            <div style={{ display: 'grid', gap: '6px' }}>
+              <label style={{
+                fontFamily: 'var(--font-poster)', fontSize: 'var(--text-2xs)', letterSpacing: 'var(--tracking-caps)',
+                textTransform: 'uppercase', color: 'var(--coop-black)'
+              }}>Message</label>
+              <textarea value={message} onChange={e => setMessage(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
+                required rows={4} placeholder="What's up?"
+                style={{
+                  fontFamily: 'var(--font-body)', fontWeight: 'var(--weight-body)', fontSize: 'var(--text-sm)',
+                  color: 'var(--text-body)', background: 'var(--coop-white)', borderRadius: 'var(--radius-md)',
+                  border: 'var(--stroke-2) solid var(--coop-black)',
+                  boxShadow: focus ? '0 0 0 3px rgba(200,37,43,.35)' : 'none',
+                  padding: 'var(--space-3)', resize: 'vertical', outline: 'none', transition: 'box-shadow var(--dur-fast) linear'
+                }} />
+            </div>
+            {status === 'error' && (
+              <span style={{ ...BODY, fontSize: 'var(--text-2xs)', color: 'var(--coop-red)' }}>
+                Something went wrong — try again, or email us directly at thecoopeats@gmail.com.
+              </span>
+            )}
+            <Button type="submit" variant="primary" block disabled={!valid || status === 'sending'}>
+              {status === 'sending' ? 'SENDING…' : 'SEND MESSAGE'}
+            </Button>
+          </form>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 function Footer() {
   return (
     <footer style={{ background: 'var(--coop-black)', color: '#fff', padding: 'var(--space-7) var(--gutter-page)', borderTop: '5px solid var(--coop-black)' }}>
@@ -124,4 +201,4 @@ function Footer() {
     </footer>
   );
 }
-Object.assign(window, { Hero, CateringBanner, Favorites, Gallery, MascotBanner, Footer, POSTER, BODY, AB, ORDER, MERCH, EXT });
+Object.assign(window, { Hero, CateringBanner, Favorites, Gallery, MascotBanner, ContactForm, Footer, POSTER, BODY, AB, ORDER, MERCH, EXT });

@@ -21,6 +21,7 @@ function App() {
         ]} />
         <Gallery />
         <MascotBanner />
+        <ContactForm />
         <Footer />
       </>}
       {route === 'menu' && <><MenuScreen /><Footer /></>}

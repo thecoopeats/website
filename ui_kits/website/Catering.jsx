@@ -7,6 +7,13 @@ const STAFF_PER_HOUR_EXTRA = 150; // charged only for hours beyond the first 2
 const MIN_SPEND = 850;
 const DEPOSIT = 0.25;
 
+// EmailJS sends the customer their own copy of the quote (arbitrary recipient,
+// no per-address activation step). Public key is safe to ship client-side —
+// restricted to thecoopeats.com / www.thecoopeats.com in EmailJS account security.
+const EMAILJS_SERVICE_ID = 'service_65yxmxx';
+const EMAILJS_TEMPLATE_ID = 'template_5s9rgzh';
+const EMAILJS_PUBLIC_KEY = 'yJXvhp4lNkX7RiOU_';
+
 const ENTREE_TIERS = [
   {
     id: 'tier1',
@@ -178,6 +185,7 @@ function Catering() {
   const [email, setEmail] = React.useState('');
   const [when, setWhen] = React.useState('');
   const [status, setStatus] = React.useState('idle'); // idle | sending | sent | error
+  const [customerEmailFailed, setCustomerEmailFailed] = React.useState(false);
 
   const toggle = (list, set) => id => set(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
 
@@ -204,24 +212,38 @@ function Catering() {
   const submit = async () => {
     if (noMenu || !email.includes('@') || status === 'sending') return;
     setStatus('sending');
-    const summaryLines = [
-      `Guests: ${guests}`,
-      `Hours of service: ${hours} (${extraHours > 0 ? `${extraHours} hr${extraHours > 1 ? 's' : ''} beyond the first 2` : 'within the first 2, included'})`,
-      `Parking zone: ${zoneMeta.label}`,
-      `Entrees: ${entreeNames}`,
-      `Sides: ${sideNames}`,
-      `Drinks (water & soda): ${drinks ? 'Yes' : 'No'}`,
-      `Event date: ${when || 'not specified'}`,
-      `Estimated total: ${money(total)}`,
-      `Per-head: ${money(Math.round(perHead))}`,
-      `Deposit to hold the date: ${money(deposit)}`
-    ];
-    try {
-      const res = await fetch('https://formsubmit.co/ajax/thecoopeats@gmail.com', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          email,
+    setCustomerEmailFailed(false);
+
+    const businessNotified = fetch('https://formsubmit.co/ajax/thecoopeats@gmail.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        email,
+        guests,
+        hours,
+        zone: zoneMeta.label,
+        entrees: entreeNames,
+        sides: sideNames,
+        drinks: drinks ? 'Yes' : 'No',
+        event_date: when || 'not specified',
+        estimated_total: money(total),
+        per_head: money(Math.round(perHead)),
+        deposit: money(deposit),
+        _subject: `Catering quote request — ${money(total)} for ${guests} guests`,
+        _replyto: email,
+        _template: 'table'
+      })
+    });
+
+    const customerNotified = fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        template_params: {
+          to_email: email,
           guests,
           hours,
           zone: zoneMeta.label,
@@ -231,18 +253,19 @@ function Catering() {
           event_date: when || 'not specified',
           estimated_total: money(total),
           per_head: money(Math.round(perHead)),
-          deposit: money(deposit),
-          _subject: `Catering quote request — ${money(total)} for ${guests} guests`,
-          _replyto: email,
-          _template: 'table',
-          _autoresponse: `Thanks for building an estimate with The Coop!\n\n${summaryLines.join('\n')}\n\nEstimate only — final quote will be directly from us. Tax and gratuity not included.`
-        })
-      });
-      if (!res.ok) throw new Error('send failed');
-      setStatus('sent');
-    } catch (err) {
+          deposit: money(deposit)
+        }
+      })
+    });
+
+    const [businessResult, customerResult] = await Promise.allSettled([businessNotified, customerNotified]);
+
+    if (businessResult.status !== 'fulfilled' || !businessResult.value.ok) {
       setStatus('error');
+      return;
     }
+    setStatus('sent');
+    setCustomerEmailFailed(customerResult.status !== 'fulfilled' || !customerResult.value.ok);
   };
 
   return (
@@ -340,7 +363,9 @@ function Catering() {
             <div style={{ background: 'var(--coop-red)', border: '3px solid var(--coop-white)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', color: '#fff' }}>
               <div style={{ ...window.POSTER, fontSize: 'var(--text-lg)' }}>Quote's on its way</div>
               <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', margin: '6px 0 12px' }}>
-                We sent the {money(total)} estimate to <strong>{email}</strong>{when ? ` for ${when}` : ''}. A real person comes back within a day.
+                {customerEmailFailed
+                  ? <>We've got your {money(total)} request{when ? ` for ${when}` : ''} — we couldn't confirm a copy reached <strong>{email}</strong>, but a real person will follow up there within a day.</>
+                  : <>We sent the {money(total)} estimate to <strong>{email}</strong>{when ? ` for ${when}` : ''}. A real person comes back within a day.</>}
               </p>
               <Button variant="light" size="sm" onClick={() => setStatus('idle')}>TWEAK THE NUMBERS</Button>
             </div>

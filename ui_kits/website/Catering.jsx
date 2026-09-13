@@ -185,7 +185,6 @@ function Catering() {
   const [email, setEmail] = React.useState('');
   const [when, setWhen] = React.useState('');
   const [status, setStatus] = React.useState('idle'); // idle | sending | sent | error
-  const [customerEmailFailed, setCustomerEmailFailed] = React.useState(false);
 
   const toggle = (list, set) => id => set(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
 
@@ -212,13 +211,14 @@ function Catering() {
   const submit = async () => {
     if (noMenu || !email.includes('@') || status === 'sending') return;
     setStatus('sending');
-    setCustomerEmailFailed(false);
 
-    const businessNotified = fetch('https://formsubmit.co/ajax/thecoopeats@gmail.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        email,
+    // One send covers both: the customer gets the styled quote (To), and
+    // thecoopeats@gmail.com is CC'd on the same email (set in the EmailJS
+    // template's settings) — that copy shows the customer's address right
+    // in the To: line, ready to reply to.
+    try {
+      await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: email,
         guests,
         hours,
         zone: zoneMeta.label,
@@ -228,35 +228,12 @@ function Catering() {
         event_date: when || 'not specified',
         estimated_total: money(total),
         per_head: money(Math.round(perHead)),
-        deposit: money(deposit),
-        _subject: `Catering quote request — ${money(total)} for ${guests} guests`,
-        _replyto: email,
-        _template: 'table'
-      })
-    });
-
-    const customerNotified = window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: email,
-      guests,
-      hours,
-      zone: zoneMeta.label,
-      entrees: entreeNames,
-      sides: sideNames,
-      drinks: drinks ? 'Yes' : 'No',
-      event_date: when || 'not specified',
-      estimated_total: money(total),
-      per_head: money(Math.round(perHead)),
-      deposit: money(deposit)
-    }, EMAILJS_PUBLIC_KEY);
-
-    const [businessResult, customerResult] = await Promise.allSettled([businessNotified, customerNotified]);
-
-    if (businessResult.status !== 'fulfilled' || !businessResult.value.ok) {
+        deposit: money(deposit)
+      }, EMAILJS_PUBLIC_KEY);
+      setStatus('sent');
+    } catch (err) {
       setStatus('error');
-      return;
     }
-    setStatus('sent');
-    setCustomerEmailFailed(customerResult.status !== 'fulfilled');
   };
 
   return (
@@ -354,9 +331,7 @@ function Catering() {
             <div style={{ background: 'var(--coop-red)', border: '3px solid var(--coop-white)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', color: '#fff' }}>
               <div style={{ ...window.POSTER, fontSize: 'var(--text-lg)' }}>Quote's on its way</div>
               <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', margin: '6px 0 12px' }}>
-                {customerEmailFailed
-                  ? <>We've got your {money(total)} request{when ? ` for ${when}` : ''} — we couldn't confirm a copy reached <strong>{email}</strong>, but a real person will follow up there within a day.</>
-                  : <>We sent the {money(total)} estimate to <strong>{email}</strong>{when ? ` for ${when}` : ''}. A real person comes back within a day.</>}
+                We sent the {money(total)} estimate to <strong>{email}</strong>{when ? ` for ${when}` : ''}. A real person comes back within a day.
               </p>
               <Button variant="light" size="sm" onClick={() => setStatus('idle')}>TWEAK THE NUMBERS</Button>
             </div>

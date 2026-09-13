@@ -7,6 +7,13 @@ const EXT = <span style={{ fontSize: '.8em' }}>↗</span>;
 const POSTER = { fontFamily: 'var(--font-poster)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-poster)', lineHeight: 1 };
 const BODY = { fontFamily: 'var(--font-body)', fontWeight: 500, lineHeight: 'var(--leading-body)' };
 
+// Distinct names from Catering.jsx's EMAILJS_* constants — these are separate
+// classic <script> tags sharing one global scope, so identical top-level
+// const names across files would throw a duplicate-declaration SyntaxError.
+const CONTACT_EMAILJS_SERVICE_ID = 'service_65yxmxx';
+const CONTACT_EMAILJS_TEMPLATE_ID = 'template_3emu57f';
+const CONTACT_EMAILJS_PUBLIC_KEY = 'yJXvhp4lNkX7RiOU_';
+
 function Hero({ onOrder, onMenu }) {
   return (
     <section style={{ position: 'relative', borderBottom: '5px solid var(--coop-black)' }}>
@@ -124,17 +131,9 @@ function ContactForm() {
     if (!valid || status === 'sending' || honey) return;
     setStatus('sending');
     try {
-      const res = await fetch('https://formsubmit.co/ajax/thecoopeats@gmail.com', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          name, email, message,
-          _subject: 'New message from thecoopeats.com',
-          _replyto: email,
-          _template: 'table'
-        })
-      });
-      if (!res.ok) throw new Error('send failed');
+      await window.emailjs.send(CONTACT_EMAILJS_SERVICE_ID, CONTACT_EMAILJS_TEMPLATE_ID, {
+        name, email, message, reply_to: email
+      }, CONTACT_EMAILJS_PUBLIC_KEY);
       setStatus('sent');
     } catch (err) {
       setStatus('error');

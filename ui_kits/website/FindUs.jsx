@@ -4,7 +4,7 @@ const { Card, Button } = window.TheCoopDesignSystem_a9fb85;
 const CAL_ID = '0r49o8cj65ab5l9lj063idkjf8%40group.calendar.google.com';
 const CAL_SUBSCRIBE = 'https://calendar.google.com/calendar/u/0?cid=MHI0OW84Y2o2NWFiNWw5bGowNjNpZGtqZjhAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ';
 // Restricted to the Calendar API + thecoopeats.com / www.thecoopeats.com in Google Cloud Console.
-const CAL_API_KEY = 'REPLACE_WITH_YOUR_CALENDAR_API_KEY';
+const CAL_API_KEY = 'AIzaSyDv6iBwojDi0lCbsEfXjz0FIHGJIt0Kk-8';
 const CAL_MAX_STOPS = 20;
 
 function formatStop(ev) {

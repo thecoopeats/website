@@ -235,28 +235,19 @@ function Catering() {
       })
     });
 
-    const customerNotified = fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        service_id: EMAILJS_SERVICE_ID,
-        template_id: EMAILJS_TEMPLATE_ID,
-        user_id: EMAILJS_PUBLIC_KEY,
-        template_params: {
-          to_email: email,
-          guests,
-          hours,
-          zone: zoneMeta.label,
-          entrees: entreeNames,
-          sides: sideNames,
-          drinks: drinks ? 'Yes' : 'No',
-          event_date: when || 'not specified',
-          estimated_total: money(total),
-          per_head: money(Math.round(perHead)),
-          deposit: money(deposit)
-        }
-      })
-    });
+    const customerNotified = window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: email,
+      guests,
+      hours,
+      zone: zoneMeta.label,
+      entrees: entreeNames,
+      sides: sideNames,
+      drinks: drinks ? 'Yes' : 'No',
+      event_date: when || 'not specified',
+      estimated_total: money(total),
+      per_head: money(Math.round(perHead)),
+      deposit: money(deposit)
+    }, EMAILJS_PUBLIC_KEY);
 
     const [businessResult, customerResult] = await Promise.allSettled([businessNotified, customerNotified]);
 
@@ -265,7 +256,7 @@ function Catering() {
       return;
     }
     setStatus('sent');
-    setCustomerEmailFailed(customerResult.status !== 'fulfilled' || !customerResult.value.ok);
+    setCustomerEmailFailed(customerResult.status !== 'fulfilled');
   };
 
   return (

@@ -1,25 +1,71 @@
-const { Card, Button, Badge, Checkbox, Radio, Select, Input, DashRule, PriceTag, HeatMeter } = window.TheCoopDesignSystem_a9fb85;
+const { Card, Button, Badge, Checkbox, Radio, Input, PriceTag, HeatMeter, Switch } = window.TheCoopDesignSystem_a9fb85;
 
-const ENTREE_OPTIONS = [
-  { id: 'original', name: 'The Original', per: 12 },
-  { id: 'classic', name: 'The Classic', per: 13 },
-  { id: 'cluckin', name: "The Cluckin'", per: 13 },
-  { id: 'bufmac', name: 'The Buf-Mac-Wich', per: 13, heat: 1 },
-  { id: 'hothoney', name: 'The Hot Honey', per: 14, heat: 1 },
-  { id: 'nashville', name: 'The Nashville', per: 14, heat: 2 },
-  { id: 'nuggies', name: 'The Nuggies', per: 8 },
-  { id: 'breakfast', name: 'The Breakfast Sandwich', per: 8 }
+const BASE_PER_HEAD = 25;
+const DRINKS_PER_HEAD = 2;
+const FREE_HOURS = 2;
+const STAFF_PER_HOUR_EXTRA = 150; // charged only for hours beyond the first 2
+const MIN_SPEND = 850;
+const DEPOSIT = 0.25;
+
+const ENTREE_TIERS = [
+  {
+    id: 'tier1',
+    label: 'Tier 1',
+    freeCount: 2,
+    extraPerItem: 1,
+    items: [
+      { id: 'nuggies', name: 'The Nuggies', description: 'eight bite-sized pieces of boneless chicken breast, freshly-battered, fried and tossed in your sauce of choice' },
+      { id: 'original', name: 'The Original', description: 'fried chicken sandwich with coleslaw, pickles, and comeback sauce' },
+      { id: 'classic', name: 'The Classic', description: 'fried chicken sandwich with lettuce, tomato, pickles, and mayo' },
+      { id: 'breakfast', name: 'The Breakfast Sandwich', description: 'egg, american cheese, bacon, hashbrown, and a touch of comeback sauce on a toasted challah bun' }
+    ]
+  },
+  {
+    id: 'tier2',
+    label: 'Tier 2',
+    freeCount: 0,
+    extraPerItem: 1,
+    items: [
+      { id: 'cluckin', name: "The Cluckin'", description: 'fried chicken sandwich with bacon, muenster cheese, and thousand island dressing' },
+      { id: 'hothoney', name: 'The Hot Honey', description: 'fried chicken sandwich with bacon, pepperjack cheese, hot honey, pickles and comeback sauce', heat: 1 },
+      { id: 'nashville', name: 'The Nashville', description: 'fried chicken sandwich with nashville hot seasoning, bacon, coleslaw, pickles, and comeback sauce', heat: 2 },
+      { id: 'bufmac', name: 'The Buf-Mac-Wich', description: 'fried chicken sandwich with buffalo sauce, mac & cheese, pickles, and comeback sauce', heat: 1 }
+    ]
+  }
 ];
 
-const SIDE_OPTIONS = [
-  { id: 'waffle', name: 'Waffle Fries', per: 5 },
-  { id: 'cheese', name: 'Cheese Fries', per: 7 },
-  { id: 'loaded', name: 'Loaded Fries', per: 10 },
-  { id: 'clucked', name: 'Clucked Fries', per: 15 },
-  { id: 'macbites', name: 'Fried Mac Bites', per: 7 },
-  { id: 'mac', name: 'Mac N Cheese', per: 5 },
-  { id: 'slaw', name: 'Coleslaw', per: 4 },
-  { id: 'hashbrown', name: 'Hashbrown', per: 2 }
+const SIDE_TIERS = [
+  {
+    id: 'tier1',
+    label: 'Tier 1',
+    freeCount: 2,
+    extraPerItem: 1,
+    items: [
+      { id: 'waffle', name: 'Waffle Fries' },
+      { id: 'slaw', name: 'Coleslaw' },
+      { id: 'mac', name: 'Mac N Cheese' },
+      { id: 'hashbrown', name: 'Hashbrown' }
+    ]
+  },
+  {
+    id: 'tier2',
+    label: 'Tier 2',
+    freeCount: 0,
+    extraPerItem: 2,
+    items: [
+      { id: 'cheese', name: 'Cheese Fries' },
+      { id: 'macbites', name: 'Fried Mac Bites' }
+    ]
+  },
+  {
+    id: 'tier3',
+    label: 'Tier 3',
+    freeCount: 0,
+    extraPerItem: 3,
+    items: [
+      { id: 'loaded', name: 'Loaded Fries' }
+    ]
+  }
 ];
 
 const ZONES = [
@@ -29,12 +75,13 @@ const ZONES = [
   { id: 'road', label: 'Over 75 miles', fee: 275 }
 ];
 
-const SIDE_PORTION = 0.6;   // not every guest takes every side
-const STAFF_PER_HOUR = 175; // truck + two on the line
-const MIN_SPEND = 850;
-const DEPOSIT = 0.25;
-
 const money = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+function tierUpcharge(tier, picked) {
+  const count = tier.items.filter(i => picked.includes(i.id)).length;
+  const billable = Math.max(0, count - tier.freeCount);
+  return billable * tier.extraPerItem;
+}
 
 function Slider({ label, value, min, max, step, onChange, suffix }) {
   return (
@@ -50,23 +97,61 @@ function Slider({ label, value, min, max, step, onChange, suffix }) {
   );
 }
 
-function PickList({ options, picked, onToggle, columns = 2 }) {
+function InfoTip({ text }) {
+  const [show, setShow] = React.useState(false);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns},minmax(0,1fr))`, gap: 'var(--space-3)' }}>
-      {options.map(o => (
-        <div key={o.id} style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
-          padding: '10px 12px', borderRadius: 'var(--radius-md)',
-          border: '2px solid ' + (picked.includes(o.id) ? 'var(--coop-red)' : 'var(--border-soft)'),
-          background: picked.includes(o.id) ? 'rgba(200,37,43,.06)' : 'transparent'
-        }}>
-          <Checkbox label={o.name} checked={picked.includes(o.id)} onChange={() => onToggle(o.id)} />
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {o.heat ? <HeatMeter level={o.heat} size={14} /> : null}
-            <PriceTag value={o.per} size="sm" />
-          </span>
-        </div>
-      ))}
+    <span style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)} onBlur={() => setShow(false)}>
+      <button type="button" aria-label="Item description" onClick={() => setShow(s => !s)} style={{
+        width: 20, height: 20, borderRadius: '999px', border: 'var(--stroke-1) solid var(--coop-black)',
+        background: 'var(--coop-white)', color: 'var(--coop-black)', fontFamily: 'var(--font-body)',
+        fontWeight: 700, fontSize: 11, lineHeight: '16px', cursor: 'pointer', padding: 0, flex: '0 0 auto'
+      }}>i</button>
+      {show && (
+        <span role="tooltip" style={{
+          position: 'absolute', zIndex: 40, bottom: 'calc(100% + 8px)', right: 0,
+          width: 200, maxWidth: '60vw', background: 'var(--coop-black)', color: 'var(--coop-white)',
+          fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: 'var(--text-3xs)', lineHeight: 1.4,
+          padding: '8px 10px', borderRadius: 'var(--radius-sm)', whiteSpace: 'normal', textAlign: 'left'
+        }}>{text}</span>
+      )}
+    </span>
+  );
+}
+
+function TierSection({ tiers, picked, onToggle, showInfo }) {
+  return (
+    <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
+      {tiers.map(tier => {
+        const ruleText = tier.freeCount > 0
+          ? `First ${tier.freeCount} free, then +${money(tier.extraPerItem)}/person each`
+          : `+${money(tier.extraPerItem)}/person each`;
+        return (
+          <div key={tier.id} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ ...window.POSTER, fontSize: 'var(--text-xs)', letterSpacing: 'var(--tracking-caps)' }}>{tier.label}</span>
+              <span style={{ ...window.BODY, fontSize: 'var(--text-3xs)', color: 'var(--text-muted)' }}>{ruleText}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 'var(--space-3)' }}>
+              {tier.items.map(item => (
+                <div key={item.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                  padding: '10px 12px', borderRadius: 'var(--radius-md)',
+                  border: '2px solid ' + (picked.includes(item.id) ? 'var(--coop-red)' : 'var(--border-soft)'),
+                  background: picked.includes(item.id) ? 'rgba(200,37,43,.06)' : 'transparent'
+                }}>
+                  <Checkbox label={item.name} checked={picked.includes(item.id)} onChange={() => onToggle(item.id)} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {item.heat ? <HeatMeter level={item.heat} size={14} /> : null}
+                    {showInfo && item.description && <InfoTip text={item.description} />}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -87,31 +172,78 @@ function Catering() {
   const [guests, setGuests] = React.useState(60);
   const [hours, setHours] = React.useState(2);
   const [zone, setZone] = React.useState('local');
-  const [entrees, setEntrees] = React.useState(['original', 'nuggies']);
-  const [sides, setSides] = React.useState(['waffle']);
+  const [entrees, setEntrees] = React.useState([]);
+  const [sides, setSides] = React.useState([]);
+  const [drinks, setDrinks] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [when, setWhen] = React.useState('');
-  const [sent, setSent] = React.useState(false);
+  const [status, setStatus] = React.useState('idle'); // idle | sending | sent | error
 
   const toggle = (list, set) => id => set(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
 
-  const chosenEntrees = ENTREE_OPTIONS.filter(o => entrees.includes(o.id));
-  const chosenSides = SIDE_OPTIONS.filter(o => sides.includes(o.id));
   const zoneMeta = ZONES.find(z => z.id === zone);
+  const entreeUpcharge = ENTREE_TIERS.reduce((t, tier) => t + tierUpcharge(tier, entrees), 0);
+  const sideUpcharge = SIDE_TIERS.reduce((t, tier) => t + tierUpcharge(tier, sides), 0);
+  const drinksUpcharge = drinks ? DRINKS_PER_HEAD : 0;
+  const perHeadFood = BASE_PER_HEAD + entreeUpcharge + sideUpcharge + drinksUpcharge;
 
-  const entreePer = chosenEntrees.length
-    ? chosenEntrees.reduce((t, o) => t + o.per, 0) / chosenEntrees.length : 0;
-  const sidePer = chosenSides.reduce((t, o) => t + o.per, 0) * SIDE_PORTION;
-
-  const food = Math.round((entreePer + sidePer) * guests);
-  const staffing = STAFF_PER_HOUR * hours;
+  const food = Math.round(perHeadFood * guests);
+  const extraHours = Math.max(0, hours - FREE_HOURS);
+  const staffing = extraHours * STAFF_PER_HOUR_EXTRA;
   const travel = zoneMeta.fee;
   const raw = food + staffing + travel;
   const total = Math.max(raw, MIN_SPEND);
   const belowMin = raw < MIN_SPEND;
   const perHead = guests ? total / guests : 0;
   const deposit = Math.round(total * DEPOSIT);
-  const noMenu = chosenEntrees.length === 0;
+  const noMenu = entrees.length === 0;
+
+  const entreeNames = ENTREE_TIERS.flatMap(t => t.items).filter(i => entrees.includes(i.id)).map(i => i.name).join(', ') || 'none selected';
+  const sideNames = SIDE_TIERS.flatMap(t => t.items).filter(i => sides.includes(i.id)).map(i => i.name).join(', ') || 'none selected';
+
+  const submit = async () => {
+    if (noMenu || !email.includes('@') || status === 'sending') return;
+    setStatus('sending');
+    const summaryLines = [
+      `Guests: ${guests}`,
+      `Hours of service: ${hours} (${extraHours > 0 ? `${extraHours} hr${extraHours > 1 ? 's' : ''} beyond the first 2` : 'within the first 2, included'})`,
+      `Parking zone: ${zoneMeta.label}`,
+      `Entrees: ${entreeNames}`,
+      `Sides: ${sideNames}`,
+      `Drinks (water & soda): ${drinks ? 'Yes' : 'No'}`,
+      `Event date: ${when || 'not specified'}`,
+      `Estimated total: ${money(total)}`,
+      `Per-head: ${money(Math.round(perHead))}`,
+      `Deposit to hold the date: ${money(deposit)}`
+    ];
+    try {
+      const res = await fetch('https://formsubmit.co/ajax/thecoopeats@gmail.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          email,
+          guests,
+          hours,
+          zone: zoneMeta.label,
+          entrees: entreeNames,
+          sides: sideNames,
+          drinks: drinks ? 'Yes' : 'No',
+          event_date: when || 'not specified',
+          estimated_total: money(total),
+          per_head: money(Math.round(perHead)),
+          deposit: money(deposit),
+          _subject: `Catering quote request — ${money(total)} for ${guests} guests`,
+          _replyto: email,
+          _template: 'table',
+          _autoresponse: `Thanks for building an estimate with The Coop!\n\n${summaryLines.join('\n')}\n\nEstimate only — final quote will be directly from us. Tax and gratuity not included.`
+        })
+      });
+      if (!res.ok) throw new Error('send failed');
+      setStatus('sent');
+    } catch (err) {
+      setStatus('error');
+    }
+  };
 
   return (
     <section style={{ maxWidth: 'var(--max-content)', margin: '0 auto', padding: 'var(--space-7) var(--gutter-page)' }}>
@@ -128,13 +260,16 @@ function Catering() {
           <Card sticker>
             <h2 style={{ ...window.POSTER, fontSize: 'var(--text-lg)', margin: '0 0 4px' }}>1 · The party</h2>
             <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 var(--space-5)' }}>
-              Two hours of service is our minimum — that's about 120 sandwiches off the line.
+              The first {FREE_HOURS} hours of service are included. Every hour after that is {money(STAFF_PER_HOUR_EXTRA)}.
             </p>
             <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
               <Slider label="Guests" value={guests} min={20} max={400} step={5} onChange={setGuests} />
               <Slider label="Hours of service" value={hours} min={2} max={6} step={1} onChange={setHours} suffix=" hrs" />
               <div style={{ display: 'grid', gap: 8 }}>
                 <span style={{ ...window.POSTER, fontSize: 'var(--text-2xs)', letterSpacing: 'var(--tracking-caps)' }}>Where are we parking?</span>
+                <p style={{ ...window.BODY, fontSize: 'var(--text-3xs)', color: 'var(--text-muted)', margin: 0 }}>
+                  We're based in Danbury, CT — the ranges below are measured from there.
+                </p>
                 <div style={{ display: 'grid', gap: 10 }}>
                   {ZONES.map(z => (
                     <Radio key={z.id} name="zone" value={z.id} checked={zone === z.id} onChange={setZone}
@@ -146,19 +281,27 @@ function Catering() {
           </Card>
 
           <Card sticker>
-            <h2 style={{ ...window.POSTER, fontSize: 'var(--text-lg)', margin: '0 0 4px' }}>2 · The sandwiches</h2>
+            <h2 style={{ ...window.POSTER, fontSize: 'var(--text-lg)', margin: '0 0 4px' }}>2 · The Entrees</h2>
             <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 var(--space-4)' }}>
-              Pick everything you want on the board. Every guest gets one, their choice.
+              Starts at {money(BASE_PER_HEAD)} per person. Every guest gets one, their choice — tap the <strong>i</strong> for what's on it.
             </p>
-            <PickList options={ENTREE_OPTIONS} picked={entrees} onToggle={toggle(entrees, setEntrees)} />
+            <TierSection tiers={ENTREE_TIERS} picked={entrees} onToggle={toggle(entrees, setEntrees)} showInfo />
           </Card>
 
           <Card sticker>
             <h2 style={{ ...window.POSTER, fontSize: 'var(--text-lg)', margin: '0 0 4px' }}>3 · The sides</h2>
             <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 var(--space-4)' }}>
-              Priced at {Math.round(SIDE_PORTION * 100)}% of headcount — nobody eats all of them.
+              Pick as many as you'd like — pricing is per person, not per pan.
             </p>
-            <PickList options={SIDE_OPTIONS} picked={sides} onToggle={toggle(sides, setSides)} />
+            <TierSection tiers={SIDE_TIERS} picked={sides} onToggle={toggle(sides, setSides)} />
+          </Card>
+
+          <Card sticker>
+            <h2 style={{ ...window.POSTER, fontSize: 'var(--text-lg)', margin: '0 0 4px' }}>4 · Drinks</h2>
+            <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 var(--space-4)' }}>
+              Water and soda, self-serve from a cooler.
+            </p>
+            <Switch label={`Add drinks for the group — +${money(DRINKS_PER_HEAD)}/person`} checked={drinks} onChange={setDrinks} />
           </Card>
         </div>
 
@@ -170,13 +313,13 @@ function Catering() {
 
           {noMenu ? (
             <p style={{ ...window.BODY, fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,.8)' }}>
-              Pick at least one sandwich and we'll do the math.
+              Pick at least one entrée and we'll do the math.
             </p>
           ) : (
             <div style={{ color: '#fff' }}>
               <div style={{ borderTop: '2px solid rgba(255,255,255,.25)', borderBottom: '2px solid rgba(255,255,255,.25)', padding: '4px 0' }}>
-                <Line label="Food" note={`${money(Math.round(entreePer + sidePer))} per guest × ${guests}`} amount={food} />
-                <Line label="On-site cooking" note={`${money(STAFF_PER_HOUR)}/hr × ${hours} hrs`} amount={staffing} />
+                <Line label="Food" note={`${money(perHeadFood)} per guest × ${guests}`} amount={food} />
+                <Line label="On-site cooking" note={extraHours > 0 ? `${money(STAFF_PER_HOUR_EXTRA)}/hr × ${extraHours} hr${extraHours > 1 ? 's' : ''} beyond the first ${FREE_HOURS}` : `First ${FREE_HOURS} hours included`} amount={staffing} />
                 <Line label="Travel" note={zoneMeta.label} amount={travel} />
               </div>
               {belowMin && (
@@ -193,13 +336,13 @@ function Catering() {
             </div>
           )}
 
-          {sent ? (
+          {status === 'sent' ? (
             <div style={{ background: 'var(--coop-red)', border: '3px solid var(--coop-white)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', color: '#fff' }}>
               <div style={{ ...window.POSTER, fontSize: 'var(--text-lg)' }}>Quote's on its way</div>
               <p style={{ ...window.BODY, fontSize: 'var(--text-2xs)', margin: '6px 0 12px' }}>
                 We sent the {money(total)} estimate to <strong>{email}</strong>{when ? ` for ${when}` : ''}. A real person comes back within a day.
               </p>
-              <Button variant="light" size="sm" onClick={() => setSent(false)}>TWEAK THE NUMBERS</Button>
+              <Button variant="light" size="sm" onClick={() => setStatus('idle')}>TWEAK THE NUMBERS</Button>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
@@ -207,8 +350,13 @@ function Catering() {
                 value={email} onChange={e => setEmail(e.target.value)} />
               <Input label="Event date" placeholder="Sat, Nov 8"
                 value={when} onChange={e => setWhen(e.target.value)} />
-              <Button variant="primary" block disabled={noMenu || !email.includes('@')}
-                onClick={() => setSent(true)}>SEND ME THIS QUOTE</Button>
+              {status === 'error' && (
+                <span style={{ ...window.BODY, fontSize: 'var(--text-2xs)', color: 'var(--sauce-spicy-maple)' }}>
+                  Something went wrong — try again, or email us directly at thecoopeats@gmail.com.
+                </span>
+              )}
+              <Button variant="primary" block disabled={noMenu || !email.includes('@') || status === 'sending'}
+                onClick={submit}>{status === 'sending' ? 'SENDING…' : 'SEND ME THIS QUOTE'}</Button>
               <p style={{ ...window.BODY, fontSize: 'var(--text-3xs)', color: 'rgba(255,255,255,.6)', margin: 0 }}>
                 Estimate only — final quote comes back from us within a day. Tax and gratuity not included.
               </p>

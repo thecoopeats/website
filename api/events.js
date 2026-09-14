@@ -1,14 +1,16 @@
 // Serverless API for Spot Check (the vending-event tracker at /spot-check).
-// Storage: Upstash Redis (REST API, no SDK dependency — plain fetch).
+// Storage: Redis over the Upstash-compatible REST API (no SDK dependency —
+// plain fetch). Works with either the plain Upstash names or the
+// KV_REST_API_* names Vercel's own Marketplace integration provisions.
 // Auth: a single shared passphrase, checked server-side against SPOTCHECK_PASSPHRASE.
 //
-// Required Vercel project env vars:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
+// Required Vercel project env vars (either naming pair works):
+//   KV_REST_API_URL / KV_REST_API_TOKEN
+//   or UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
 //   SPOTCHECK_PASSPHRASE
 
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const PASSPHRASE = process.env.SPOTCHECK_PASSPHRASE;
 const HASH_KEY = "spotcheck:events";
 
@@ -54,7 +56,7 @@ module.exports = async (req, res) => {
 
   if (!REDIS_URL || !REDIS_TOKEN || !PASSPHRASE) {
     res.status(500).json({
-      error: "Server not configured. Set UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, and SPOTCHECK_PASSPHRASE in the Vercel project's environment variables, then redeploy.",
+      error: "Server not configured. Set KV_REST_API_URL, KV_REST_API_TOKEN (or the UPSTASH_REDIS_REST_* equivalents), and SPOTCHECK_PASSPHRASE in the Vercel project's environment variables, then redeploy.",
     });
     return;
   }

@@ -1,14 +1,22 @@
 // Serverless API for Spot Check's "Leads near Danbury" panel.
-// Runs a few real web searches (Tavily Search API) for food-truck vendor
-// opportunities near Danbury, CT and returns raw results — titles, links,
-// snippets. These are leads, not verified events: nothing here is written
-// as a tracked event automatically. The front end lets the user review a
-// lead and, if it looks real, open it pre-filled in the normal "Log an
-// event" form so they still do the actual vetting themselves.
 //
-// The queries and include/exclude keyword lists are user-editable via
-// api/search-settings.js (stored in Redis); this file falls back to
-// lib/searchDefaults.js when nothing's been saved.
+// Two sources, merged:
+//  - Tavily web search for vendor-call pages ("leads") — raw search
+//    results, not verified events. The front end lets the user review a
+//    lead and, if it looks real, open it pre-filled in the normal "Log an
+//    event" form so they still do the actual vetting themselves. Each
+//    lead also carries a best-effort dateGuess/possiblyPast flag, parsed
+//    from any date mentioned in its title/snippet, since Tavily has no
+//    concept of "is this event still upcoming."
+//  - Ticketmaster Discovery API for "confirmedEvents" — real festivals/
+//    fairs/markets with real start dates and real lat/lng radius search,
+//    filtered to startDateTime >= now server-side. Ticketmaster is
+//    optional: if TICKETMASTER_API_KEY isn't set, confirmedEvents is
+//    just empty and the rest of the endpoint still works.
+//
+// The queries and include/exclude keyword lists (Tavily side) are
+// user-editable via api/search-settings.js (stored in Redis); this file
+// falls back to lib/searchDefaults.js when nothing's been saved.
 //
 // Results are cached in Redis for CACHE_TTL_MS so casual page loads don't
 // burn API credits; pass ?refresh=1 to force a fresh search. Saving new
@@ -16,7 +24,8 @@
 // reflects the change instead of serving stale results.
 //
 // Required Vercel project env vars (beyond the ones events.js needs):
-//   TAVILY_API_KEY   — from tavily.com, free tier, no card required
+//   TAVILY_API_KEY        — from tavily.com, free tier, no card required
+//   TICKETMASTER_API_KEY  — optional, from developer.ticketmaster.com, free
 
 const { effectiveSettings } = require("../lib/searchDefaults");
 
@@ -24,10 +33,16 @@ const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const PASSPHRASE = process.env.SPOTCHECK_PASSPHRASE;
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+const TICKETMASTER_API_KEY = process.env.TICKETMASTER_API_KEY;
 
 const CACHE_KEY = "spotcheck:leads";
 const SETTINGS_KEY = "spotcheck:search-settings";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// Ticketmaster needs real coordinates, not free-text location; Danbury is
+// the truck's home base per the distance-from-Danbury field on events too.
+const DANBURY_LAT = 41.3948;
+const DANBURY_LNG = -73.4540;
 
 async function redis(command) {
   const res = await fetch(REDIS_URL, {
@@ -48,6 +63,58 @@ function looksLikeVendorCall(lead, positive, negative) {
   const hasPositive = positive.some((s) => text.includes(s.toLowerCase()));
   const hasNegative = negative.some((s) => text.includes(s.toLowerCase()));
   return hasPositive && !hasNegative;
+}
+
+const MONTHS = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
+  may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10,
+  dec: 11, december: 11,
+};
+
+// Best-effort: find every date mentioned in a snippet of text and return
+// the latest one. Deliberately conservative — this is a hint for the UI
+// ("this might already be past"), never a reason to silently drop a lead,
+// since free-text date parsing is unreliable and a false "past" verdict
+// would hide a genuinely good lead.
+function guessLatestDate(text) {
+  if (!text) return null;
+  const now = Date.now();
+  const found = [];
+
+  const monthRe = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/gi;
+  let m;
+  while ((m = monthRe.exec(text))) {
+    const month = MONTHS[m[1].toLowerCase()];
+    const day = parseInt(m[2], 10);
+    if (month === undefined || day < 1 || day > 31) continue;
+    let year = m[3] ? parseInt(m[3], 10) : new Date().getFullYear();
+    if (!m[3]) {
+      // No year mentioned: assume the nearest occurrence that isn't more
+      // than ~60 days in the past (listings usually drop the year for
+      // "this season").
+      const guess = new Date(year, month, day);
+      if (guess.getTime() < now - 60 * 86400000) year += 1;
+    }
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) found.push(d);
+  }
+
+  const numRe = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/g;
+  while ((m = numRe.exec(text))) {
+    const month = parseInt(m[1], 10) - 1;
+    const day = parseInt(m[2], 10);
+    let year = parseInt(m[3], 10);
+    if (year < 100) year += 2000;
+    if (month < 0 || month > 11 || day < 1 || day > 31) continue;
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) found.push(d);
+  }
+
+  if (!found.length) return null;
+  // Take the latest mention — postings often lead with a "posted on" or
+  // application-deadline date before the actual event date.
+  return found.reduce((latest, d) => (d > latest ? d : latest));
 }
 
 async function tavilySearch(query, excludeDomains) {
@@ -82,22 +149,80 @@ async function tavilySearch(query, excludeDomains) {
   }));
 }
 
-async function runDiscovery(radius, settings) {
+async function findLeads(radius, settings) {
   const queries = settings.queries.map((q) =>
     q.split("{radius}").join(String(radius)).split("{location}").join(settings.location)
   );
-  const batches = await Promise.all(queries.map((q) => tavilySearch(q, settings.excludeDomains).catch(() => [])));
+  const batches = await Promise.all(
+    queries.map((q) =>
+      tavilySearch(q, settings.excludeDomains).catch((err) => {
+        console.error("Tavily query failed:", q, err && err.message);
+        return [];
+      })
+    )
+  );
   const seen = new Set();
   const leads = [];
   for (const batch of batches) {
     for (const lead of batch) {
       if (!lead.url || seen.has(lead.url)) continue;
       if (!looksLikeVendorCall(lead, settings.positive, settings.negative)) continue;
+      const guessed = guessLatestDate((lead.title || "") + " " + (lead.snippet || ""));
+      lead.dateGuess = guessed ? guessed.toISOString().slice(0, 10) : null;
+      lead.possiblyPast = !!(guessed && guessed.getTime() < Date.now() - 3 * 86400000);
       seen.add(lead.url);
       leads.push(lead);
     }
   }
   return leads;
+}
+
+const TM_EVENT_SIGNALS = [
+  "festival", "fair", "food truck", "food fest", "market", "carnival",
+  "block party", "street fair", "brewfest", "brew fest", "food & wine",
+  "night market", "farmers market",
+];
+
+async function findConfirmedEvents(radius) {
+  if (!TICKETMASTER_API_KEY) return [];
+  const params = new URLSearchParams({
+    apikey: TICKETMASTER_API_KEY,
+    latlong: DANBURY_LAT + "," + DANBURY_LNG,
+    radius: String(radius),
+    unit: "miles",
+    startDateTime: new Date().toISOString().slice(0, 19) + "Z",
+    sort: "date,asc",
+    size: "50",
+  });
+  let res;
+  try {
+    res = await fetch("https://app.ticketmaster.com/discovery/v2/events.json?" + params.toString());
+  } catch (err) {
+    console.error("Ticketmaster request failed:", err && err.message);
+    return [];
+  }
+  if (!res.ok) {
+    console.error("Ticketmaster search failed:", res.status, await res.text().catch(() => ""));
+    return [];
+  }
+  const data = await res.json().catch(() => ({}));
+  const events = (data._embedded && data._embedded.events) || [];
+  const out = [];
+  for (const ev of events) {
+    const name = ev.name || "";
+    if (!TM_EVENT_SIGNALS.some((s) => name.toLowerCase().includes(s))) continue;
+    const venue = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
+    out.push({
+      name,
+      url: ev.url || null,
+      startDate: (ev.dates && ev.dates.start && ev.dates.start.localDate) || null,
+      dateTBD: !!(ev.dates && ev.dates.start && (ev.dates.start.dateTBD || ev.dates.start.dateTBA)),
+      venueName: venue ? venue.name : null,
+      city: venue && venue.city ? venue.city.name : null,
+      state: venue && venue.state ? venue.state.stateCode : null,
+    });
+  }
+  return out;
 }
 
 module.exports = async (req, res) => {
@@ -136,16 +261,36 @@ module.exports = async (req, res) => {
         const cached = JSON.parse(cachedRaw);
         const age = Date.now() - cached.fetchedAt;
         if (cached.radius === radius && cached.location === settings.location && age < CACHE_TTL_MS) {
-          res.status(200).json({ leads: cached.leads, fetchedAt: cached.fetchedAt, radius, location: settings.location, cached: true });
+          res.status(200).json({
+            leads: cached.leads,
+            confirmedEvents: cached.confirmedEvents || [],
+            fetchedAt: cached.fetchedAt,
+            radius,
+            location: settings.location,
+            cached: true,
+          });
           return;
         }
       }
     }
 
-    const leads = await runDiscovery(radius, settings);
-    const payload = { radius, location: settings.location, fetchedAt: Date.now(), leads };
+    const [leads, confirmedEvents] = await Promise.all([
+      findLeads(radius, settings),
+      findConfirmedEvents(radius).catch((err) => {
+        console.error("Ticketmaster lookup failed:", err && err.message);
+        return [];
+      }),
+    ]);
+    const payload = { radius, location: settings.location, fetchedAt: Date.now(), leads, confirmedEvents };
     await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
-    res.status(200).json({ leads, fetchedAt: payload.fetchedAt, radius, location: settings.location, cached: false });
+    res.status(200).json({
+      leads,
+      confirmedEvents,
+      fetchedAt: payload.fetchedAt,
+      radius,
+      location: settings.location,
+      cached: false,
+    });
   } catch (err) {
     res.status(500).json({ error: String((err && err.message) || err) });
   }

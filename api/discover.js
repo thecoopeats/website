@@ -83,7 +83,9 @@ async function tavilySearch(query, excludeDomains) {
 }
 
 async function runDiscovery(radius, settings) {
-  const queries = settings.queries.map((q) => q.split("{radius}").join(String(radius)));
+  const queries = settings.queries.map((q) =>
+    q.split("{radius}").join(String(radius)).split("{location}").join(settings.location)
+  );
   const batches = await Promise.all(queries.map((q) => tavilySearch(q, settings.excludeDomains).catch(() => [])));
   const seen = new Set();
   const leads = [];
@@ -133,17 +135,17 @@ module.exports = async (req, res) => {
       if (cachedRaw) {
         const cached = JSON.parse(cachedRaw);
         const age = Date.now() - cached.fetchedAt;
-        if (cached.radius === radius && age < CACHE_TTL_MS) {
-          res.status(200).json({ leads: cached.leads, fetchedAt: cached.fetchedAt, radius, cached: true });
+        if (cached.radius === radius && cached.location === settings.location && age < CACHE_TTL_MS) {
+          res.status(200).json({ leads: cached.leads, fetchedAt: cached.fetchedAt, radius, location: settings.location, cached: true });
           return;
         }
       }
     }
 
     const leads = await runDiscovery(radius, settings);
-    const payload = { radius, fetchedAt: Date.now(), leads };
+    const payload = { radius, location: settings.location, fetchedAt: Date.now(), leads };
     await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
-    res.status(200).json({ leads, fetchedAt: payload.fetchedAt, radius, cached: false });
+    res.status(200).json({ leads, fetchedAt: payload.fetchedAt, radius, location: settings.location, cached: false });
   } catch (err) {
     res.status(500).json({ error: String((err && err.message) || err) });
   }

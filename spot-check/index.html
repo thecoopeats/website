@@ -161,7 +161,7 @@
   .drawer-head{background:var(--surface-board);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;}
   .drawer-head h2{font-family:var(--font-poster);font-weight:400;font-size:var(--text-lg);letter-spacing:.01em;}
   .drawer-close{background:transparent;border:none;color:#f2f0ea;font-size:22px;cursor:pointer;line-height:1;padding:4px;}
-  .drawer-body{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:20px;flex:1;min-height:0;}
+  .drawer-body{overflow-y:auto;overscroll-behavior:contain;padding:20px;display:flex;flex-direction:column;gap:20px;flex:1;min-height:0;}
   .drawer-foot{padding:14px 20px;border-top:var(--stroke-2) solid var(--border-hard);display:flex;justify-content:space-between;gap:10px;background:var(--surface-card);}
 
   fieldset{border:var(--stroke-2) solid var(--border-soft);border-radius:var(--radius-md);padding:14px 16px 16px;margin:0;}
@@ -231,7 +231,7 @@
     <div class="stat-strip" id="stat-strip"></div>
 
     <details class="panel" id="discover-panel" open>
-      <summary><span class="eyebrow" style="color:var(--text-accent)">Leads near Danbury, CT</span><span class="chev">▸</span></summary>
+      <summary><span class="eyebrow" style="color:var(--text-accent)">Leads near <span id="leads-eyebrow-location">your area</span></span><span class="chev">▸</span></summary>
       <div class="panel-body">
         <p class="panel-hint">Real web search results for food truck vendor opportunities — not verified events. Review each one and run it through the checklist before you trust it; "Log as event" just pre-fills the form with what was found.</p>
         <div class="panel-row">
@@ -242,8 +242,12 @@
         </div>
 
         <div id="search-settings-form" hidden>
+          <div class="panel-row">
+            <label style="flex:1 1 100%;">Your area <span class="hint">town(s) or region you're willing to travel to — comma-separated, e.g. "Danbury, Newtown, Ridgefield, New Milford, CT". Used everywhere {location} appears below.</span>
+              <input type="text" id="set-location" placeholder="Danbury, CT"></label>
+          </div>
           <div class="settings-grid">
-            <label>Search queries <span class="hint">one per line — {radius} is replaced with the number above</span>
+            <label>Search queries <span class="hint">one per line — {radius} and {location} get replaced automatically</span>
               <textarea id="set-queries" rows="4"></textarea></label>
             <label>Must mention at least one of <span class="hint">one phrase per line — a result needs one of these to be kept</span>
               <textarea id="set-positive" rows="4"></textarea></label>
@@ -819,6 +823,7 @@
     renderChecklist(e ? e.checklist : {});
     overlay.classList.add("open");
     drawer.classList.add("open");
+    document.body.style.overflow = "hidden";
     var first = form.elements.namedItem("name");
     setTimeout(function(){ first && first.focus(); }, 50);
   }
@@ -833,6 +838,7 @@
   function closeDrawer(){
     overlay.classList.remove("open");
     drawer.classList.remove("open");
+    document.body.style.overflow = "";
     state.editingId = null;
   }
 
@@ -960,6 +966,7 @@
       });
     }).then(function(body){
       renderLeads(body.leads, body);
+      if (body.location) document.getElementById("leads-eyebrow-location").textContent = body.location;
     }).catch(function(err){
       document.getElementById("leads-list").innerHTML = '<p class="lead-error">Couldn\'t load leads: ' + esc(err.message) + '</p>';
       statusEl.textContent = "";
@@ -976,6 +983,7 @@
     return (arr || []).join("\n");
   }
   function fillSettingsForm(settings){
+    document.getElementById("set-location").value = settings.location || "";
     document.getElementById("set-queries").value = arrayToLines(settings.queries);
     document.getElementById("set-positive").value = arrayToLines(settings.positive);
     document.getElementById("set-negative").value = arrayToLines(settings.negative);
@@ -1003,6 +1011,7 @@
     var statusEl = document.getElementById("settings-status");
     statusEl.textContent = "Saving…";
     var payload = {
+      location: document.getElementById("set-location").value.trim(),
       queries: linesToArray(document.getElementById("set-queries").value),
       positive: linesToArray(document.getElementById("set-positive").value),
       negative: linesToArray(document.getElementById("set-negative").value),

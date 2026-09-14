@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Spot Check — The Coop</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  /* Page-scoped additions layered on the site's own tokens (styles.css).
+     Legitimacy semantics aren't part of the brand system, so they're
+     defined here as their own small token set rather than raw hex. */
+  :root{
+    --legit-good-bg:#E7F4E3;
+    --legit-warn-bg:#FDEAE0;
+    --legit-bad-bg:#FCE1E1;
+    --accent-soft-bg:#FBE4E2;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--surface-page);color:var(--text-body);font-family:var(--font-body);font-weight:var(--weight-body);line-height:var(--leading-body);}
+  button,input,select,textarea{font-family:inherit;color:inherit;}
+  h1,h2,h3{text-wrap:balance;margin:0;}
+  .tnum{font-variant-numeric:tabular-nums;}
+  [hidden]{display:none !important;}
+
+  a{color:var(--text-accent);}
+  :focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}
+
+  .eyebrow{font-family:var(--font-mono);font-size:var(--text-3xs);font-weight:600;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-muted);}
+
+  /* Passphrase gate */
+  #gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--surface-board);}
+  .gate-card{background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-lg);box-shadow:var(--shadow-sticker-lg);padding:32px;max-width:360px;width:100%;text-align:center;}
+  .gate-card img{height:52px;margin-bottom:14px;}
+  .gate-card h1{font-family:var(--font-poster);font-weight:400;font-size:var(--text-xl);margin-bottom:6px;}
+  .gate-card p{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 18px;}
+  .gate-card input{width:100%;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:10px 12px;font-size:var(--text-sm);text-align:center;letter-spacing:.08em;margin-bottom:12px;}
+  .gate-error{color:var(--coop-red);font-size:var(--text-2xs);font-weight:700;min-height:16px;margin-bottom:8px;}
+
+  .masthead{background:var(--surface-board);color:var(--text-on-black);padding:20px clamp(16px,4vw,40px) 0;}
+  .masthead-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:18px;}
+  .wordmark{display:flex;align-items:center;gap:12px;}
+  .wordmark img{height:40px;width:auto;display:block;}
+  .wordmark-text h1{font-family:var(--font-poster);font-weight:400;font-size:var(--text-xl);color:#fff;letter-spacing:.01em;}
+  .wordmark-text .tagline{font-family:var(--font-mono);font-size:var(--text-3xs);color:var(--gray-400);text-transform:uppercase;letter-spacing:var(--tracking-caps);margin-top:2px;}
+  .head-actions{display:flex;align-items:center;gap:8px;}
+  .dash-strip{height:4px;background-image:var(--dash-rule);}
+
+  .btn{
+    appearance:none;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:9px 16px;
+    font-family:var(--font-body);font-weight:700;font-size:var(--text-xs);cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;line-height:1;
+    box-shadow:var(--shadow-sticker-press);transform:translate(-1px,-1px);
+    transition:transform .1s ease, box-shadow .1s ease;
+  }
+  .btn:hover{transform:translate(-2px,-2px);box-shadow:var(--shadow-sticker);}
+  .btn:active{transform:translate(0,0);box-shadow:0 0 0 var(--border-hard);}
+  .btn-primary{background:var(--surface-accent);color:var(--text-on-red);}
+  .btn-ghost{background:transparent;border-color:#565149;color:#f2f0ea;}
+  .btn-quiet{background:var(--surface-card);border-color:var(--border-hard);color:var(--text-body);}
+  .btn-danger{background:var(--legit-bad-bg);border-color:var(--coop-red);color:var(--coop-red);}
+  .btn[disabled]{opacity:.5;cursor:not-allowed;}
+  .btn-sm{padding:6px 11px;font-size:var(--text-2xs);border-width:var(--stroke-1);}
+
+  main{max-width:var(--max-content);margin:0 auto;padding:24px clamp(16px,4vw,40px) 80px;}
+
+  .stat-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;}
+  .stat-tile{background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-md);padding:14px 16px;box-shadow:var(--shadow-card);}
+  .stat-tile .label{font-family:var(--font-mono);font-size:var(--text-3xs);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-muted);}
+  .stat-tile .value{font-family:var(--font-mono);font-size:var(--text-lg);font-weight:700;margin-top:4px;}
+
+  .panel{background:var(--surface-sunk);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:20px;}
+  .panel summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:700;}
+  .panel summary::-webkit-details-marker{display:none;}
+  .panel summary .chev{transition:transform .15s ease;font-family:var(--font-mono);color:var(--text-accent);}
+  .panel[open] summary .chev{transform:rotate(90deg);}
+  .panel-body{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
+  .panel-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+  .panel-row label{font-size:var(--text-2xs);font-weight:700;color:var(--text-muted);display:flex;align-items:center;gap:6px;}
+  .panel-row input[type=number]{width:80px;}
+  .panel-hint{font-size:var(--text-2xs);color:var(--text-muted);}
+  .source-links{display:flex;flex-wrap:wrap;gap:8px;}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;}
+  .search-box{position:relative;flex:1 1 220px;min-width:180px;}
+  .search-box input{width:100%;padding:9px 12px 9px 34px;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);background:var(--surface-card);font-size:var(--text-xs);font-weight:500;}
+  .search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-muted);}
+  .chip-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{border:var(--stroke-2) solid var(--border-hard);background:var(--surface-card);border-radius:var(--radius-pill);padding:6px 13px;font-size:var(--text-2xs);font-weight:700;cursor:pointer;color:var(--text-muted);}
+  .chip[aria-pressed="true"]{background:var(--border-hard);border-color:var(--border-hard);color:var(--surface-page);}
+  select.sort-select{border:var(--stroke-2) solid var(--border-hard);background:var(--surface-card);border-radius:var(--radius-sm);padding:8px 10px;font-size:var(--text-2xs);font-weight:600;}
+
+  .filter-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:20px;padding:12px 14px;background:var(--surface-sunk);border:var(--stroke-1) dashed var(--border-soft);border-radius:var(--radius-md);}
+  .filter-group{display:flex;align-items:center;gap:6px;font-size:var(--text-2xs);font-weight:700;color:var(--text-muted);}
+  .filter-group input{width:76px;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:6px 8px;font-size:var(--text-xs);background:var(--surface-card);font-family:var(--font-mono);}
+  .filter-group span.sep{color:var(--text-muted);font-weight:500;}
+  .link-reset{font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:600;text-decoration:underline;background:none;border:none;color:var(--text-accent);cursor:pointer;padding:0;}
+
+  .empty-state{border:var(--stroke-2) dashed var(--border-hard);border-radius:var(--radius-lg);padding:48px 24px;text-align:center;color:var(--text-muted);}
+  .empty-state h2{font-family:var(--font-poster);font-weight:400;font-size:var(--text-lg);color:var(--text-heading);margin-bottom:6px;letter-spacing:.01em;}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:18px;}
+  .card{
+    background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-lg);box-shadow:var(--shadow-sticker);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .card-top{padding:14px 16px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .badge{
+    font-family:var(--font-mono);font-size:var(--text-3xs);font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:4px 9px;border-radius:var(--radius-pill);border:var(--stroke-1) solid var(--border-hard);
+    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  }
+  .badge-status{background:var(--surface-sunk);color:var(--text-muted);}
+  .badge-example{background:var(--accent-soft-bg);color:var(--text-accent);}
+
+  .legit-indicator{display:flex;align-items:center;gap:6px;}
+  .legit-dot{width:15px;height:15px;border-radius:50%;border:var(--stroke-1) solid var(--border-hard);flex-shrink:0;}
+  .legit-score{font-family:var(--font-mono);font-size:var(--text-3xs);font-weight:700;color:var(--text-muted);}
+
+  .dash-strip-thin{height:4px;margin-top:12px;background-image:var(--dash-rule);opacity:.55;}
+
+  .card-body{padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px;flex:1;}
+  .card-body h3{font-family:var(--font-poster);font-weight:400;font-size:var(--text-md);letter-spacing:.01em;line-height:var(--leading-snug);}
+  .card-org{font-size:var(--text-2xs);color:var(--text-muted);font-weight:600;}
+  .field-row{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:var(--text-xs);}
+  .field{display:flex;flex-direction:column;gap:1px;}
+  .field .k{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);}
+  .field .v{font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:600;}
+  .deadline-flag{font-family:var(--font-mono);font-size:var(--text-3xs);font-weight:700;padding:2px 8px;border-radius:var(--radius-sm);background:var(--legit-warn-bg);color:#8a4712;width:fit-content;}
+  .deadline-flag.urgent{background:var(--legit-bad-bg);color:var(--coop-red-dark);}
+
+  .card-footer{margin-top:auto;padding-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .contact-links{display:flex;gap:6px;}
+  .icon-btn{width:30px;height:30px;border-radius:var(--radius-sm);border:var(--stroke-2) solid var(--border-hard);background:var(--surface-sunk);display:flex;align-items:center;justify-content:center;color:var(--text-body);text-decoration:none;}
+  .icon-btn:hover{background:var(--surface-accent);color:var(--text-on-red);}
+  .icon-btn svg{width:14px;height:14px;}
+  .card-actions{display:flex;gap:6px;}
+
+  .overlay{position:fixed;inset:0;background:rgba(10,10,10,.5);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:20;}
+  .overlay.open{opacity:1;pointer-events:auto;}
+  .drawer{
+    position:fixed;top:0;right:0;bottom:0;width:min(540px,100vw);background:var(--surface-page);
+    border-left:var(--stroke-2) solid var(--border-hard);
+    transform:translateX(100%);transition:transform .2s ease;
+    z-index:21;display:flex;flex-direction:column;
+  }
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{background:var(--surface-board);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;}
+  .drawer-head h2{font-family:var(--font-poster);font-weight:400;font-size:var(--text-lg);letter-spacing:.01em;}
+  .drawer-close{background:transparent;border:none;color:#f2f0ea;font-size:22px;cursor:pointer;line-height:1;padding:4px;}
+  .drawer-body{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:20px;flex:1;}
+  .drawer-foot{padding:14px 20px;border-top:var(--stroke-2) solid var(--border-hard);display:flex;justify-content:space-between;gap:10px;background:var(--surface-card);}
+
+  fieldset{border:var(--stroke-2) solid var(--border-soft);border-radius:var(--radius-md);padding:14px 16px 16px;margin:0;}
+  legend{font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:var(--tracking-caps);color:var(--text-accent);padding:0 6px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .form-grid.single{grid-template-columns:1fr;}
+  label{display:flex;flex-direction:column;gap:4px;font-size:var(--text-2xs);font-weight:700;color:var(--text-muted);}
+  label span.req::after{content:" *";color:var(--coop-red);}
+  label .hint{font-weight:500;font-size:10.5px;color:var(--text-muted);}
+  input[type=text],input[type=number],input[type=date],input[type=email],input[type=tel],input[type=url],select,textarea{
+    border:var(--stroke-2) solid var(--border-soft);border-radius:var(--radius-sm);padding:8px 10px;font-size:var(--text-xs);background:var(--surface-card);color:var(--text-body);font-weight:500;font-family:var(--font-body);
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--coop-red);}
+  textarea{resize:vertical;min-height:64px;}
+
+  .checklist-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-soft);}
+  .checklist-item:last-child{border-bottom:none;}
+  .checklist-item input{margin-top:3px;width:17px;height:17px;accent-color:var(--coop-red);flex-shrink:0;}
+  .checklist-item .ci-label{font-size:var(--text-xs);font-weight:700;color:var(--text-body);}
+  .checklist-item .ci-help{font-size:var(--text-3xs);color:var(--text-muted);margin-top:1px;font-weight:500;}
+
+  .score-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .score-bar{flex:1;height:9px;border-radius:var(--radius-pill);background:var(--surface-sunk);overflow:hidden;display:flex;gap:2px;border:var(--stroke-1) solid var(--border-hard);}
+  .score-seg{flex:1;background:transparent;}
+  .score-text{font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;white-space:nowrap;}
+
+  @media (max-width:520px){
+    .form-grid{grid-template-columns:1fr;}
+    .drawer{width:100vw;}
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-card">
+    <img src="/assets/logo-coop.png" alt="The Coop">
+    <h1>Spot Check</h1>
+    <p>Internal vending-event tracker. Enter the passphrase to continue.</p>
+    <form id="gate-form">
+      <input type="password" id="gate-input" autocomplete="current-password" placeholder="Passphrase" required>
+      <div class="gate-error" id="gate-error"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Unlock</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-root" hidden>
+  <div class="masthead">
+    <div class="masthead-inner">
+      <div class="wordmark">
+        <img src="/assets/logo-coop-knockout.png" alt="The Coop">
+        <div class="wordmark-text">
+          <h1>Spot Check</h1>
+          <div class="tagline">Vending event tracker &amp; vetting log</div>
+        </div>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost btn-sm" id="btn-lock">Lock</button>
+        <button class="btn btn-primary" id="btn-add">+ Log an event</button>
+      </div>
+    </div>
+  </div>
+  <div class="dash-strip"></div>
+
+  <main>
+    <div class="stat-strip" id="stat-strip"></div>
+
+    <details class="panel" id="discover-panel">
+      <summary><span class="eyebrow" style="color:var(--text-accent)">Scout new events near Danbury, CT</span><span class="chev">▸</span></summary>
+      <div class="panel-body">
+        <p class="panel-hint">This page can't crawl the web on its own, but it can hand you a running start: pick a radius and jump straight to a real search, pre-filled for food truck vendor opportunities around Danbury.</p>
+        <div class="panel-row">
+          <label>Within <input type="number" id="discover-radius" value="25" min="1" max="300" step="1"> miles of Danbury, CT</label>
+        </div>
+        <div class="source-links" id="discover-links"></div>
+      </div>
+    </details>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="search" placeholder="Search by name, organizer, or location">
+      </div>
+      <div class="chip-row" id="status-filter"></div>
+      <select class="sort-select" id="sort-select">
+        <option value="date">Sort: Date, soonest</option>
+        <option value="fee">Sort: Fee, lowest</option>
+        <option value="legit">Sort: Legitimacy</option>
+        <option value="distance">Sort: Distance, nearest</option>
+        <option value="guests">Sort: Guests, most</option>
+        <option value="recent">Sort: Recently added</option>
+      </select>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-group">
+        Guests
+        <input type="number" id="filter-guest-min" placeholder="Min" min="0">
+        <span class="sep">–</span>
+        <input type="number" id="filter-guest-max" placeholder="Max" min="0">
+      </div>
+      <div class="filter-group">
+        Within
+        <input type="number" id="filter-distance-max" placeholder="mi" min="0">
+        mi of Danbury
+      </div>
+      <button type="button" class="link-reset" id="btn-reset-filters">Reset filters</button>
+    </div>
+
+    <div id="list-region"></div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+  <div class="drawer-head">
+    <h2 id="drawer-title">Log an event</h2>
+    <button class="drawer-close" id="drawer-close" aria-label="Close">&times;</button>
+  </div>
+  <form id="event-form">
+    <div class="drawer-body">
+
+      <fieldset>
+        <legend>Event</legend>
+        <div class="form-grid">
+          <label class="single" style="grid-column:1/-1"><span class="req">Event name</span>
+            <input type="text" name="name" required></label>
+          <label><span class="req">Organizer</span>
+            <input type="text" name="organizer" required placeholder="e.g. City of Ashland, Riverfront Festivals LLC"></label>
+          <label>Event type
+            <select name="eventType">
+              <option>Festival</option><option>Farmers market</option><option>Fair / carnival</option>
+              <option>Private / corporate</option><option>Brewery / bar partnership</option>
+              <option>Community / nonprofit</option><option>Other</option>
+            </select></label>
+          <label>Status
+            <select name="status">
+              <option value="researching">Researching</option>
+              <option value="applied">Applied</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="declined">Declined by organizer</option>
+              <option value="passed">Passed on it</option>
+            </select></label>
+          <label>Where you found it
+            <input type="text" name="sourceLink" placeholder="Link or how you heard about it"></label>
+          <label>Start date
+            <input type="date" name="dateStart"></label>
+          <label>End date <span class="hint">(if multi-day)</span>
+            <input type="date" name="dateEnd"></label>
+          <label>Application deadline
+            <input type="date" name="applicationDeadline"></label>
+          <label>Location / address
+            <input type="text" name="location" placeholder="Street, city, state"></label>
+          <label>Hours of service
+            <input type="text" name="hours" placeholder="e.g. Sat 11am–9pm, Sun 11am–6pm"></label>
+          <label>Expected attendance <span class="hint">(headcount)</span>
+            <input type="number" name="guestsEstimate" min="0" step="1" placeholder="e.g. 4000"></label>
+          <label>Distance from Danbury, CT <span class="hint">(miles — check Google Maps once)</span>
+            <input type="number" name="distanceMiles" min="0" step="1" placeholder="e.g. 22"></label>
+          <label class="single" style="grid-column:1/-1">Attendance notes <span class="hint">(optional)</span>
+            <input type="text" name="attendanceNotes" placeholder="e.g. first year, unknown — or 'range 3k–5k, rain dependent'"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Fee to participate</legend>
+        <div class="form-grid">
+          <label>Amount ($)
+            <input type="number" name="feeAmount" min="0" step="1" placeholder="0"></label>
+          <label>Fee structure
+            <select name="feeType">
+              <option value="flat">Flat fee</option>
+              <option value="percentage">% of sales</option>
+              <option value="flat_plus_percentage">Flat + % of sales</option>
+              <option value="free">No fee</option>
+              <option value="other">Other</option>
+            </select></label>
+          <label style="grid-column:1/-1">Fee notes
+            <input type="text" name="feeNotes" placeholder="e.g. $150 flat + 10% of sales over $1,500; refundable deposit terms, etc."></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Contact for sign-up</legend>
+        <div class="form-grid">
+          <label>Name
+            <input type="text" name="contactName"></label>
+          <label>Email
+            <input type="email" name="contactEmail"></label>
+          <label>Phone
+            <input type="tel" name="contactPhone"></label>
+          <label>Website / social
+            <input type="url" name="contactWebsite" placeholder="https://"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Vetting checklist</legend>
+        <div class="score-row">
+          <div class="score-bar" id="score-bar"></div>
+          <span class="score-text tnum" id="score-text">0 / 6</span>
+        </div>
+        <div id="checklist"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Notes</legend>
+        <label class="single">
+          <textarea name="notes" placeholder="Anything else worth remembering — call notes, negotiated terms, gut read..."></textarea>
+        </label>
+      </fieldset>
+
+    </div>
+    <div class="drawer-foot">
+      <button type="button" class="btn btn-danger" id="btn-delete" hidden>Delete</button>
+      <div style="display:flex;gap:8px;margin-left:auto;">
+        <button type="button" class="btn btn-quiet" id="btn-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save event</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var CHECKLIST = [
+    {key:"organizerVerifiable", label:"Organizer is a verifiable entity", help:"City department, chamber, established promoter, or registered business — not just a personal profile.", critical:true},
+    {key:"pastEventsDocumented", label:"Past events are documented", help:"Photos, reviews, or a public vendor list from a prior year."},
+    {key:"writtenContract", label:"Written vendor agreement provided", help:"A contract or application spells out terms, not just a verbal deal."},
+    {key:"noUpfrontFullPayment", label:"No full payment demanded before signing", help:"Legit events invoice after a signed agreement, not full payment upfront by Venmo or Zelle.", critical:true},
+    {key:"coiDefined", label:"Insurance (COI) requirement is clearly defined", help:"Events with a real liability structure spell out coverage minimums."},
+    {key:"responsiveContact", label:"Contact is responsive and verifiable", help:"A business email or phone that resolves, not just a DM."}
+  ];
+
+  var STATUSES = [
+    {key:"researching", label:"Researching"},
+    {key:"applied", label:"Applied"},
+    {key:"confirmed", label:"Confirmed"},
+    {key:"declined", label:"Declined"},
+    {key:"passed", label:"Passed"}
+  ];
+
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function hexToRgb(hex){
+    hex = (hex || "").replace("#","");
+    if (hex.length === 3) hex = hex.split("").map(function(c){ return c+c; }).join("");
+    var num = parseInt(hex, 16) || 0;
+    return [(num>>16)&255, (num>>8)&255, num&255];
+  }
+  var HEAT_STOPS = [
+    {t:0,    rgb:hexToRgb(cssVar("--heat-3"))},         // nashville red — red flags
+    {t:0.34, rgb:hexToRgb(cssVar("--heat-2"))},         // buffalo orange
+    {t:0.67, rgb:hexToRgb(cssVar("--heat-1"))},         // spicy maple yellow
+    {t:1,    rgb:hexToRgb(cssVar("--sauce-honey-bbq"))} // honey bbq green — super legit
+  ];
+
+  var state = {
+    events: [],
+    search: "",
+    statusFilter: "all",
+    sort: "date",
+    guestMin: "",
+    guestMax: "",
+    distanceMax: "",
+    editingId: null
+  };
+
+  var apiStore = null;
+  var passKey = null;
+
+  function apiHeaders(){
+    return {"Content-Type":"application/json", "x-spotcheck-key": passKey};
+  }
+  function makeApiStore(){
+    var BASE = "/api/events";
+    return {
+      fetchAll: function(){
+        return fetch(BASE, {headers: apiHeaders()}).then(function(r){
+          if (r.status === 401){ var e = new Error("Incorrect passphrase."); e.code = 401; throw e; }
+          if (!r.ok) return r.json().catch(function(){return {};}).then(function(b){ throw new Error(b.error || ("HTTP " + r.status)); });
+          return r.json();
+        }).then(function(body){ return body.events || []; });
+      },
+      add: function(data){
+        return fetch(BASE, {method:"POST", headers: apiHeaders(), body: JSON.stringify(data)})
+          .then(function(r){ if (!r.ok) throw new Error("Save failed"); return r.json(); });
+      },
+      update: function(id, data){
+        return fetch(BASE + "?id=" + encodeURIComponent(id), {method:"PUT", headers: apiHeaders(), body: JSON.stringify(data)})
+          .then(function(r){ if (!r.ok) throw new Error("Save failed"); return r.json(); });
+      },
+      remove: function(id){
+        return fetch(BASE + "?id=" + encodeURIComponent(id), {method:"DELETE", headers: apiHeaders()})
+          .then(function(r){ if (!r.ok) throw new Error("Delete failed"); return r.json(); });
+      }
+    };
+  }
+
+  function refreshList(){
+    return apiStore.fetchAll().then(function(events){
+      state.events = events;
+      render();
+    });
+  }
+
+  function lerp(a,b,t){ return a + (b - a) * t; }
+  function heatColor(ratio){
+    ratio = Math.max(0, Math.min(1, ratio));
+    for (var i = 0; i < HEAT_STOPS.length - 1; i++){
+      var a = HEAT_STOPS[i], b = HEAT_STOPS[i+1];
+      if (ratio >= a.t && ratio <= b.t){
+        var t = (b.t === a.t) ? 0 : (ratio - a.t) / (b.t - a.t);
+        var rgb = [0,1,2].map(function(k){ return Math.round(lerp(a.rgb[k], b.rgb[k], t)); });
+        return "rgb(" + rgb.join(",") + ")";
+      }
+    }
+    return "rgb(76,175,62)";
+  }
+
+  function legitVerdict(checklist){
+    checklist = checklist || {};
+    var total = CHECKLIST.length;
+    var passed = 0;
+    var criticalFailed = false;
+    CHECKLIST.forEach(function(item){
+      if (checklist[item.key]) passed++;
+      else if (item.critical) criticalFailed = true;
+    });
+    var level;
+    if (criticalFailed) level = "bad";
+    else if (passed >= 5) level = "good";
+    else if (passed >= 3) level = "warn";
+    else level = "bad";
+    var ratio = passed / total;
+    if (criticalFailed) ratio = Math.min(ratio, 0.18);
+    return {passed: passed, total: total, level: level, ratio: ratio, color: heatColor(ratio)};
+  }
+
+  var LEVEL_LABEL = {good:"Verified", warn:"Needs vetting", bad:"Red flags"};
+
+  function fmtDate(iso){
+    if (!iso) return null;
+    var d = new Date(iso + "T00:00:00");
+    if (isNaN(d)) return null;
+    return d.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
+  }
+
+  function daysUntil(iso){
+    if (!iso) return null;
+    var d = new Date(iso + "T00:00:00");
+    var now = new Date();
+    now.setHours(0,0,0,0);
+    return Math.round((d - now) / 86400000);
+  }
+
+  function fmtMoney(n){
+    if (n === null || n === undefined || n === "") return null;
+    var num = Number(n);
+    if (isNaN(num)) return null;
+    return "$" + num.toLocaleString();
+  }
+
+  function esc(str){
+    return String(str == null ? "" : str).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function renderStats(){
+    var events = state.events;
+    var tracking = events.length;
+    var pipeline = events.filter(function(e){ return e.status === "applied" || e.status === "confirmed"; }).length;
+    var upcoming = events.filter(function(e){
+      if (!e.dateStart) return false;
+      var d = daysUntil(e.dateStart);
+      return d !== null && d >= 0 && d <= 30 && e.status !== "declined" && e.status !== "passed";
+    }).length;
+    var fees = events.map(function(e){ return e.feeType === "free" ? null : Number(e.feeAmount); })
+      .filter(function(n){ return n !== null && !isNaN(n) && n > 0; });
+    var avgFee = fees.length ? Math.round(fees.reduce(function(a,b){return a+b;},0) / fees.length) : null;
+
+    var tiles = [
+      {label:"Tracking", value: tracking},
+      {label:"In pipeline", value: pipeline},
+      {label:"Next 30 days", value: upcoming},
+      {label:"Avg. fee logged", value: avgFee !== null ? "$" + avgFee.toLocaleString() : "—"}
+    ];
+    document.getElementById("stat-strip").innerHTML = tiles.map(function(t){
+      return '<div class="stat-tile"><div class="label">'+esc(t.label)+'</div><div class="value tnum">'+esc(t.value)+'</div></div>';
+    }).join("");
+  }
+
+  function renderStatusFilter(){
+    var el = document.getElementById("status-filter");
+    var options = [{key:"all", label:"All"}].concat(STATUSES);
+    el.innerHTML = options.map(function(o){
+      var pressed = state.statusFilter === o.key;
+      return '<button type="button" class="chip" data-status="'+o.key+'" aria-pressed="'+pressed+'">'+esc(o.label)+'</button>';
+    }).join("");
+    el.querySelectorAll(".chip").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        state.statusFilter = btn.getAttribute("data-status");
+        renderStatusFilter();
+        renderList();
+      });
+    });
+  }
+
+  function filteredSorted(){
+    var q = state.search.trim().toLowerCase();
+    var gMin = state.guestMin === "" ? null : Number(state.guestMin);
+    var gMax = state.guestMax === "" ? null : Number(state.guestMax);
+    var dMax = state.distanceMax === "" ? null : Number(state.distanceMax);
+
+    var list = state.events.filter(function(e){
+      if (state.statusFilter !== "all" && e.status !== state.statusFilter) return false;
+      if (q){
+        var hay = [e.name, e.organizer, e.location].join(" ").toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      if (gMin !== null){
+        if (e.guestsEstimate === undefined || e.guestsEstimate === null || e.guestsEstimate === "") return false;
+        if (Number(e.guestsEstimate) < gMin) return false;
+      }
+      if (gMax !== null){
+        if (e.guestsEstimate === undefined || e.guestsEstimate === null || e.guestsEstimate === "") return false;
+        if (Number(e.guestsEstimate) > gMax) return false;
+      }
+      if (dMax !== null){
+        if (e.distanceMiles === undefined || e.distanceMiles === null || e.distanceMiles === "") return false;
+        if (Number(e.distanceMiles) > dMax) return false;
+      }
+      return true;
+    });
+    list = list.slice();
+    if (state.sort === "date"){
+      list.sort(function(a,b){
+        var da = a.dateStart ? new Date(a.dateStart) : new Date("9999-12-31");
+        var db = b.dateStart ? new Date(b.dateStart) : new Date("9999-12-31");
+        return da - db;
+      });
+    } else if (state.sort === "fee"){
+      list.sort(function(a,b){
+        var fa = a.feeType === "free" ? 0 : (Number(a.feeAmount) || Infinity);
+        var fb = b.feeType === "free" ? 0 : (Number(b.feeAmount) || Infinity);
+        return fa - fb;
+      });
+    } else if (state.sort === "legit"){
+      list.sort(function(a,b){
+        return legitVerdict(b.checklist).ratio - legitVerdict(a.checklist).ratio;
+      });
+    } else if (state.sort === "distance"){
+      list.sort(function(a,b){
+        var da = (a.distanceMiles === undefined || a.distanceMiles === null || a.distanceMiles === "") ? Infinity : Number(a.distanceMiles);
+        var db = (b.distanceMiles === undefined || b.distanceMiles === null || b.distanceMiles === "") ? Infinity : Number(b.distanceMiles);
+        return da - db;
+      });
+    } else if (state.sort === "guests"){
+      list.sort(function(a,b){
+        var ga = (a.guestsEstimate === undefined || a.guestsEstimate === null || a.guestsEstimate === "") ? -1 : Number(a.guestsEstimate);
+        var gb = (b.guestsEstimate === undefined || b.guestsEstimate === null || b.guestsEstimate === "") ? -1 : Number(b.guestsEstimate);
+        return gb - ga;
+      });
+    } else if (state.sort === "recent"){
+      list.sort(function(a,b){
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+    }
+    return list;
+  }
+
+  function contactIcon(type){
+    var icons = {
+      mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+      phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L7.9 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2Z"/></svg>',
+      link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.4l2-2a5 5 0 0 0-7-7l-1.2 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.4l-2 2a5 5 0 0 0 7 7l1.1-1.1"/></svg>'
+    };
+    return icons[type] || "";
+  }
+
+  function eventCard(e){
+    var v = legitVerdict(e.checklist);
+    var statusLabel = (STATUSES.find(function(s){return s.key===e.status;}) || {}).label || "Researching";
+    var dl = e.applicationDeadline ? daysUntil(e.applicationDeadline) : null;
+    var deadlineHtml = "";
+    if (dl !== null){
+      var urgent = dl <= 7;
+      deadlineHtml = '<span class="deadline-flag' + (urgent ? " urgent" : "") + '">' +
+        (dl < 0 ? "Deadline passed" : dl === 0 ? "Deadline today" : "Apply within " + dl + "d") + '</span>';
+    }
+    var fee = e.feeType === "free" ? "No fee" : (fmtMoney(e.feeAmount) || "—");
+    var dateRange = fmtDate(e.dateStart) || "Date TBD";
+    if (e.dateEnd && fmtDate(e.dateEnd) && e.dateEnd !== e.dateStart) dateRange += " – " + fmtDate(e.dateEnd);
+
+    var guestsText = "—";
+    if (e.guestsEstimate !== undefined && e.guestsEstimate !== null && e.guestsEstimate !== ""){
+      guestsText = Number(e.guestsEstimate).toLocaleString() + " guests";
+    } else if (e.attendanceNotes){
+      guestsText = e.attendanceNotes;
+    }
+    var distanceText = (e.distanceMiles !== undefined && e.distanceMiles !== null && e.distanceMiles !== "")
+      ? Number(e.distanceMiles).toLocaleString() + " mi from Danbury" : "—";
+
+    var links = "";
+    if (e.contactEmail) links += '<a class="icon-btn" title="Email" href="mailto:'+esc(e.contactEmail)+'">'+contactIcon("mail")+'</a>';
+    if (e.contactPhone) links += '<a class="icon-btn" title="Call" href="tel:'+esc(e.contactPhone)+'">'+contactIcon("phone")+'</a>';
+    if (e.contactWebsite) links += '<a class="icon-btn" title="Website" href="'+esc(e.contactWebsite)+'" target="_blank" rel="noopener">'+contactIcon("link")+'</a>';
+
+    return (
+      '<div class="card" data-id="'+e.id+'">'+
+        '<div class="card-top">'+
+          '<span class="badge badge-status">'+esc(statusLabel)+'</span>'+
+          '<span class="legit-indicator" title="Legitimacy: '+v.passed+' of '+v.total+' checks — '+LEVEL_LABEL[v.level]+'">'+
+            '<span class="legit-dot" style="background:'+v.color+'"></span>'+
+            '<span class="legit-score">'+v.passed+'/'+v.total+'</span>'+
+          '</span>'+
+        '</div>'+
+        '<div class="dash-strip-thin"></div>'+
+        '<div class="card-body">'+
+          '<div>'+
+            '<h3>'+esc(e.name || "Untitled event")+'</h3>'+
+            '<div class="card-org">'+esc(e.organizer || "Organizer unknown")+(e.eventType ? " · " + esc(e.eventType) : "")+'</div>'+
+          '</div>'+
+          '<div class="field-row">'+
+            '<div class="field"><span class="k">Dates</span><span class="v">'+esc(dateRange)+'</span></div>'+
+            '<div class="field"><span class="k">Location</span><span class="v">'+esc(e.location || "—")+'</span></div>'+
+          '</div>'+
+          '<div class="field-row">'+
+            '<div class="field"><span class="k">Attendance</span><span class="v">'+esc(guestsText)+'</span></div>'+
+            '<div class="field"><span class="k">Distance</span><span class="v">'+esc(distanceText)+'</span></div>'+
+          '</div>'+
+          '<div class="field-row">'+
+            '<div class="field"><span class="k">Hours</span><span class="v">'+esc(e.hours || "—")+'</span></div>'+
+            '<div class="field"><span class="k">Fee</span><span class="v">'+esc(fee)+'</span></div>'+
+          '</div>'+
+          (deadlineHtml ? '<div>'+deadlineHtml+'</div>' : '')+
+          '<div class="card-footer">'+
+            '<div class="contact-links">'+links+'</div>'+
+            '<div class="card-actions">'+
+              '<button type="button" class="btn btn-quiet btn-sm btn-edit">Edit</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'
+    );
+  }
+
+  function renderList(){
+    var region = document.getElementById("list-region");
+    var list = filteredSorted();
+    if (!list.length){
+      var msg = state.events.length ? "No events match your filters." : "No events logged yet.";
+      var sub = state.events.length ? "Try clearing the search, status, or range filters." : "Add the first one you're scouting — even a maybe.";
+      region.innerHTML = '<div class="empty-state"><h2>'+esc(msg)+'</h2><p>'+esc(sub)+'</p></div>';
+      return;
+    }
+    region.innerHTML = '<div class="grid">' + list.map(eventCard).join("") + '</div>';
+    region.querySelectorAll(".btn-edit").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.closest(".card").getAttribute("data-id");
+        openDrawer(id);
+      });
+    });
+  }
+
+  function render(){
+    renderStats();
+    renderList();
+  }
+
+  function renderChecklist(checklist){
+    checklist = checklist || {};
+    var el = document.getElementById("checklist");
+    el.innerHTML = CHECKLIST.map(function(item){
+      return (
+        '<label class="checklist-item">'+
+          '<input type="checkbox" name="cl_'+item.key+'" '+(checklist[item.key] ? "checked" : "")+'>'+
+          '<span><span class="ci-label">'+esc(item.label)+'</span><br><span class="ci-help">'+esc(item.help)+'</span></span>'+
+        '</label>'
+      );
+    }).join("");
+    el.querySelectorAll("input").forEach(function(cb){ cb.addEventListener("change", updateScoreBar); });
+    updateScoreBar();
+  }
+
+  function readChecklistFromForm(){
+    var out = {};
+    CHECKLIST.forEach(function(item){
+      var el = document.querySelector('[name="cl_'+item.key+'"]');
+      out[item.key] = !!(el && el.checked);
+    });
+    return out;
+  }
+
+  function updateScoreBar(){
+    var checklist = readChecklistFromForm();
+    var v = legitVerdict(checklist);
+    var bar = document.getElementById("score-bar");
+    var segs = [];
+    for (var i=0;i<v.total;i++){
+      segs.push('<div class="score-seg" style="background:' + (i < v.passed ? v.color : "transparent") + '"></div>');
+    }
+    bar.innerHTML = segs.join("");
+    document.getElementById("score-text").textContent = v.passed + " / " + v.total + " · " + LEVEL_LABEL[v.level];
+    document.getElementById("score-text").style.color = v.color;
+  }
+
+  var drawer = document.getElementById("drawer");
+  var overlay = document.getElementById("overlay");
+  var form = document.getElementById("event-form");
+
+  function openDrawer(id){
+    state.editingId = id || null;
+    var e = id ? state.events.find(function(ev){ return ev.id === id; }) : null;
+    document.getElementById("drawer-title").textContent = e ? "Edit event" : "Log an event";
+    document.getElementById("btn-delete").hidden = !e;
+    form.reset();
+    if (e){
+      Object.keys(e).forEach(function(k){
+        var field = form.elements.namedItem(k);
+        if (field && !(field instanceof RadioNodeList)) field.value = e[k] == null ? "" : e[k];
+      });
+    } else {
+      form.elements.namedItem("status").value = "researching";
+      form.elements.namedItem("feeType").value = "flat";
+    }
+    renderChecklist(e ? e.checklist : {});
+    overlay.classList.add("open");
+    drawer.classList.add("open");
+    var first = form.elements.namedItem("name");
+    setTimeout(function(){ first && first.focus(); }, 50);
+  }
+
+  function closeDrawer(){
+    overlay.classList.remove("open");
+    drawer.classList.remove("open");
+    state.editingId = null;
+  }
+
+  document.getElementById("btn-add").addEventListener("click", function(){ openDrawer(null); });
+  document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+  document.getElementById("btn-cancel").addEventListener("click", closeDrawer);
+  overlay.addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function(ev){
+    if (ev.key === "Escape" && drawer.classList.contains("open")) closeDrawer();
+  });
+
+  document.getElementById("btn-delete").addEventListener("click", function(){
+    if (!state.editingId) return;
+    if (!confirm("Delete this event? This can't be undone.")) return;
+    apiStore.remove(state.editingId).then(function(){ return refreshList(); }).then(closeDrawer);
+  });
+
+  form.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var fd = new FormData(form);
+    var data = {};
+    ["name","organizer","eventType","status","dateStart","dateEnd","applicationDeadline","location","hours",
+     "attendanceNotes","feeType","feeNotes","contactName","contactEmail","contactPhone","contactWebsite",
+     "sourceLink","notes"].forEach(function(k){ data[k] = fd.get(k) || ""; });
+    data.feeAmount = fd.get("feeAmount") ? Number(fd.get("feeAmount")) : null;
+    data.guestsEstimate = fd.get("guestsEstimate") ? Number(fd.get("guestsEstimate")) : null;
+    data.distanceMiles = fd.get("distanceMiles") ? Number(fd.get("distanceMiles")) : null;
+    data.checklist = readChecklistFromForm();
+    data.updatedAt = Date.now();
+
+    var op;
+    if (state.editingId){
+      op = apiStore.update(state.editingId, data);
+    } else {
+      data.createdAt = Date.now();
+      op = apiStore.add(data);
+    }
+    op.then(function(){ return refreshList(); }).then(closeDrawer).catch(function(err){
+      alert("Couldn't save: " + err.message);
+    });
+  });
+
+  document.getElementById("search").addEventListener("input", function(ev){
+    state.search = ev.target.value;
+    renderList();
+  });
+  document.getElementById("sort-select").addEventListener("change", function(ev){
+    state.sort = ev.target.value;
+    renderList();
+  });
+  document.getElementById("filter-guest-min").addEventListener("input", function(ev){
+    state.guestMin = ev.target.value;
+    renderList();
+  });
+  document.getElementById("filter-guest-max").addEventListener("input", function(ev){
+    state.guestMax = ev.target.value;
+    renderList();
+  });
+  document.getElementById("filter-distance-max").addEventListener("input", function(ev){
+    state.distanceMax = ev.target.value;
+    renderList();
+  });
+  document.getElementById("btn-reset-filters").addEventListener("click", function(){
+    state.guestMin = ""; state.guestMax = ""; state.distanceMax = "";
+    state.search = ""; state.statusFilter = "all";
+    document.getElementById("filter-guest-min").value = "";
+    document.getElementById("filter-guest-max").value = "";
+    document.getElementById("filter-distance-max").value = "";
+    document.getElementById("search").value = "";
+    renderStatusFilter();
+    renderList();
+  });
+
+  function renderDiscoverLinks(){
+    var radius = Number(document.getElementById("discover-radius").value) || 25;
+    var q = "food truck vendor application near Danbury, CT within " + radius + " miles";
+    var sources = [
+      {label:"Search Google", url:"https://www.google.com/search?q=" + encodeURIComponent(q)},
+      {label:"Search Google Maps", url:"https://www.google.com/maps/search/" + encodeURIComponent("food truck festival vendors near Danbury CT")},
+      {label:"Search Eventbrite", url:"https://www.eventbrite.com/d/ct--danbury/food-truck-vendors/"},
+      {label:"Search Facebook Events", url:"https://www.facebook.com/events/search/?q=" + encodeURIComponent("food truck vendors Danbury CT")}
+    ];
+    document.getElementById("discover-links").innerHTML = sources.map(function(s){
+      return '<a class="btn btn-quiet btn-sm" href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.label)+' ↗</a>';
+    }).join("");
+  }
+  document.getElementById("discover-radius").addEventListener("input", renderDiscoverLinks);
+  renderDiscoverLinks();
+
+  renderStatusFilter();
+
+  /* Passphrase gate */
+  var gateForm = document.getElementById("gate-form");
+  var gateInput = document.getElementById("gate-input");
+  var gateError = document.getElementById("gate-error");
+  var gateEl = document.getElementById("gate");
+  var appRoot = document.getElementById("app-root");
+
+  function showGate(message){
+    gateError.textContent = message || "";
+    gateEl.hidden = false;
+    appRoot.hidden = true;
+  }
+  function showApp(){
+    gateEl.hidden = true;
+    appRoot.hidden = false;
+  }
+
+  function tryLoad(key){
+    passKey = key;
+    apiStore = makeApiStore();
+    return apiStore.fetchAll().then(function(events){
+      try { localStorage.setItem("spotcheck_key", key); } catch(e){}
+      state.events = events;
+      showApp();
+      render();
+    }).catch(function(err){
+      if (err.code === 401){
+        try { localStorage.removeItem("spotcheck_key"); } catch(e){}
+        showGate("Incorrect passphrase.");
+      } else {
+        showGate("Couldn't connect: " + err.message);
+      }
+    });
+  }
+
+  gateForm.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    tryLoad(gateInput.value);
+  });
+
+  document.getElementById("btn-lock").addEventListener("click", function(){
+    try { localStorage.removeItem("spotcheck_key"); } catch(e){}
+    location.reload();
+  });
+
+  (function init(){
+    var saved = null;
+    try { saved = localStorage.getItem("spotcheck_key"); } catch(e){}
+    if (saved) tryLoad(saved);
+    else showGate("");
+  })();
+})();
+</script>
+</body>
+</html>

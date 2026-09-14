@@ -79,7 +79,16 @@
   .panel-row label{font-size:var(--text-2xs);font-weight:700;color:var(--text-muted);display:flex;align-items:center;gap:6px;}
   .panel-row input[type=number]{width:80px;}
   .panel-hint{font-size:var(--text-2xs);color:var(--text-muted);}
-  .source-links{display:flex;flex-wrap:wrap;gap:8px;}
+  .leads-list{display:flex;flex-direction:column;gap:10px;}
+  .lead-card{background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-md);padding:12px 14px;display:flex;flex-direction:column;gap:6px;}
+  .lead-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .lead-title{font-weight:700;font-size:var(--text-xs);}
+  .lead-title a{color:var(--text-body);text-decoration:none;}
+  .lead-title a:hover{color:var(--text-accent);text-decoration:underline;}
+  .lead-url{font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted);word-break:break-all;}
+  .lead-snippet{font-size:var(--text-2xs);color:var(--text-muted);line-height:var(--leading-body);}
+  .lead-empty{color:var(--text-muted);font-size:var(--text-2xs);}
+  .lead-error{color:var(--coop-red-dark);font-size:var(--text-2xs);font-weight:600;}
 
   .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;}
   .search-box{position:relative;flex:1 1 220px;min-width:180px;}
@@ -217,14 +226,16 @@
   <main>
     <div class="stat-strip" id="stat-strip"></div>
 
-    <details class="panel" id="discover-panel">
-      <summary><span class="eyebrow" style="color:var(--text-accent)">Scout new events near Danbury, CT</span><span class="chev">▸</span></summary>
+    <details class="panel" id="discover-panel" open>
+      <summary><span class="eyebrow" style="color:var(--text-accent)">Leads near Danbury, CT</span><span class="chev">▸</span></summary>
       <div class="panel-body">
-        <p class="panel-hint">This page can't crawl the web on its own, but it can hand you a running start: pick a radius and jump straight to a real search, pre-filled for food truck vendor opportunities around Danbury.</p>
+        <p class="panel-hint">Real web search results for food truck vendor opportunities — not verified events. Review each one and run it through the checklist before you trust it; "Log as event" just pre-fills the form with what was found.</p>
         <div class="panel-row">
-          <label>Within <input type="number" id="discover-radius" value="25" min="1" max="300" step="1"> miles of Danbury, CT</label>
+          <label>Within <input type="number" id="discover-radius" value="50" min="1" max="300" step="1"> miles</label>
+          <button type="button" class="btn btn-quiet btn-sm" id="btn-refresh-leads">Refresh now</button>
+          <span class="panel-hint" id="leads-status"></span>
         </div>
-        <div class="source-links" id="discover-links"></div>
+        <div id="leads-list"></div>
       </div>
     </details>
 
@@ -788,6 +799,13 @@
     setTimeout(function(){ first && first.focus(); }, 50);
   }
 
+  function openDrawerFromLead(lead){
+    openDrawer(null);
+    form.elements.namedItem("name").value = lead.title || "";
+    form.elements.namedItem("sourceLink").value = lead.url || "";
+    form.elements.namedItem("notes").value = 'Found via automatic search' + (lead.publishedDate ? " (" + lead.publishedDate + ")" : "") + ': "' + (lead.snippet || "") + '"';
+  }
+
   function closeDrawer(){
     overlay.classList.remove("open");
     drawer.classList.remove("open");
@@ -867,21 +885,65 @@
     renderList();
   });
 
-  function renderDiscoverLinks(){
-    var radius = Number(document.getElementById("discover-radius").value) || 25;
-    var q = "food truck vendor application near Danbury, CT within " + radius + " miles";
-    var sources = [
-      {label:"Search Google", url:"https://www.google.com/search?q=" + encodeURIComponent(q)},
-      {label:"Search Google Maps", url:"https://www.google.com/maps/search/" + encodeURIComponent("food truck festival vendors near Danbury CT")},
-      {label:"Search Eventbrite", url:"https://www.eventbrite.com/d/ct--danbury/food-truck-vendors/"},
-      {label:"Search Facebook Events", url:"https://www.facebook.com/events/search/?q=" + encodeURIComponent("food truck vendors Danbury CT")}
-    ];
-    document.getElementById("discover-links").innerHTML = sources.map(function(s){
-      return '<a class="btn btn-quiet btn-sm" href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.label)+' ↗</a>';
-    }).join("");
+  function timeAgo(ms){
+    var mins = Math.round((Date.now() - ms) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    return Math.round(hrs / 24) + "d ago";
   }
-  document.getElementById("discover-radius").addEventListener("input", renderDiscoverLinks);
-  renderDiscoverLinks();
+
+  function renderLeads(leads, meta){
+    var listEl = document.getElementById("leads-list");
+    var statusEl = document.getElementById("leads-status");
+    statusEl.textContent = meta && meta.fetchedAt ? ("Updated " + timeAgo(meta.fetchedAt) + (meta.cached ? "" : " · fresh search")) : "";
+    if (!leads || !leads.length){
+      listEl.innerHTML = '<p class="lead-empty">No leads found in this radius yet. Try widening it or hit Refresh.</p>';
+      return;
+    }
+    listEl.innerHTML = '<div class="leads-list">' + leads.map(function(lead, i){
+      return (
+        '<div class="lead-card" data-idx="'+i+'">'+
+          '<div class="lead-top">'+
+            '<div>'+
+              '<div class="lead-title"><a href="'+esc(lead.url)+'" target="_blank" rel="noopener">'+esc(lead.title || lead.url)+'</a></div>'+
+              '<div class="lead-url">'+esc(lead.url)+'</div>'+
+            '</div>'+
+            '<button type="button" class="btn btn-quiet btn-sm btn-log-lead" data-idx="'+i+'">+ Log as event</button>'+
+          '</div>'+
+          (lead.snippet ? '<div class="lead-snippet">'+esc(lead.snippet)+'</div>' : '')+
+        '</div>'
+      );
+    }).join("") + '</div>';
+    listEl.querySelectorAll(".btn-log-lead").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var idx = Number(btn.getAttribute("data-idx"));
+        openDrawerFromLead(leads[idx]);
+      });
+    });
+  }
+
+  function loadLeads(forceRefresh){
+    var radius = Number(document.getElementById("discover-radius").value) || 50;
+    var statusEl = document.getElementById("leads-status");
+    statusEl.textContent = "Searching…";
+    var url = "/api/discover?radius=" + encodeURIComponent(radius) + (forceRefresh ? "&refresh=1" : "");
+    return fetch(url, {headers: apiHeaders()}).then(function(r){
+      return r.json().then(function(body){
+        if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
+        return body;
+      });
+    }).then(function(body){
+      renderLeads(body.leads, body);
+    }).catch(function(err){
+      document.getElementById("leads-list").innerHTML = '<p class="lead-error">Couldn\'t load leads: ' + esc(err.message) + '</p>';
+      statusEl.textContent = "";
+    });
+  }
+
+  document.getElementById("btn-refresh-leads").addEventListener("click", function(){ loadLeads(true); });
+  document.getElementById("discover-radius").addEventListener("change", function(){ loadLeads(false); });
 
   document.getElementById("sort-select").value = state.sort;
   document.getElementById("filter-distance-max").value = state.distanceMax;
@@ -913,6 +975,7 @@
       state.events = events;
       showApp();
       render();
+      loadLeads(false);
     }).catch(function(err){
       if (err.code === 401){
         try { localStorage.removeItem("spotcheck_key"); } catch(e){}

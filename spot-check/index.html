@@ -408,14 +408,17 @@
     {t:1,    rgb:hexToRgb(cssVar("--sauce-honey-bbq"))} // honey bbq green — super legit
   ];
 
+  var DEFAULT_SORT = "distance";
+  var DEFAULT_DISTANCE_MAX = "50";
+
   var state = {
     events: [],
     search: "",
     statusFilter: "all",
-    sort: "date",
+    sort: DEFAULT_SORT,
     guestMin: "",
     guestMax: "",
-    distanceMax: "",
+    distanceMax: DEFAULT_DISTANCE_MAX,
     editingId: null
   };
 
@@ -851,11 +854,14 @@
     renderList();
   });
   document.getElementById("btn-reset-filters").addEventListener("click", function(){
-    state.guestMin = ""; state.guestMax = ""; state.distanceMax = "";
+    state.guestMin = ""; state.guestMax = "";
+    state.distanceMax = DEFAULT_DISTANCE_MAX;
+    state.sort = DEFAULT_SORT;
     state.search = ""; state.statusFilter = "all";
     document.getElementById("filter-guest-min").value = "";
     document.getElementById("filter-guest-max").value = "";
-    document.getElementById("filter-distance-max").value = "";
+    document.getElementById("filter-distance-max").value = DEFAULT_DISTANCE_MAX;
+    document.getElementById("sort-select").value = DEFAULT_SORT;
     document.getElementById("search").value = "";
     renderStatusFilter();
     renderList();
@@ -876,6 +882,9 @@
   }
   document.getElementById("discover-radius").addEventListener("input", renderDiscoverLinks);
   renderDiscoverLinks();
+
+  document.getElementById("sort-select").value = state.sort;
+  document.getElementById("filter-distance-max").value = state.distanceMax;
 
   renderStatusFilter();
 

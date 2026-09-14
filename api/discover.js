@@ -6,11 +6,19 @@
 // lead and, if it looks real, open it pre-filled in the normal "Log an
 // event" form so they still do the actual vetting themselves.
 //
+// The queries and include/exclude keyword lists are user-editable via
+// api/search-settings.js (stored in Redis); this file falls back to
+// lib/searchDefaults.js when nothing's been saved.
+//
 // Results are cached in Redis for CACHE_TTL_MS so casual page loads don't
-// burn API credits; pass ?refresh=1 to force a fresh search.
+// burn API credits; pass ?refresh=1 to force a fresh search. Saving new
+// settings clears this cache (see search-settings.js) so the next load
+// reflects the change instead of serving stale results.
 //
 // Required Vercel project env vars (beyond the ones events.js needs):
 //   TAVILY_API_KEY   — from tavily.com, free tier, no card required
+
+const { effectiveSettings } = require("../lib/searchDefaults");
 
 const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -18,32 +26,8 @@ const PASSPHRASE = process.env.SPOTCHECK_PASSPHRASE;
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
 const CACHE_KEY = "spotcheck:leads";
+const SETTINGS_KEY = "spotcheck:search-settings";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-const ANCHOR = "Danbury, CT";
-
-// Noise sources that never carry vendor-call content, only reviews/listings/menus.
-const EXCLUDE_DOMAINS = ["yelp.com", "tripadvisor.com", "pinterest.com", "amazon.com", "ebay.com", "youtube.com"];
-
-// A result has to look like an actual invitation to vend, not general food-truck
-// content — "best trucks in town" roundups, menus, for-sale listings, etc.
-const POSITIVE_SIGNALS = [
-  "vendor application", "call for vendors", "vendors wanted", "seeking vendors",
-  "seeking food trucks", "food truck vendors", "vendor registration", "vendor spot",
-  "vendor fee", "vendor form", "become a vendor", "apply to vend", "food vendor",
-  "vending opportunity", "vendor packet", "vendor rules",
-];
-const NEGATIVE_SIGNALS = [
-  "best food truck", "top 10 food truck", "top food truck", "food trucks near me",
-  "food truck for sale", "food truck menu", "food truck review", "things to do",
-  "our menu", "catering menu", "food truck schedule", "where to find",
-];
-
-function looksLikeVendorCall(lead) {
-  const text = ((lead.title || "") + " " + (lead.snippet || "")).toLowerCase();
-  const hasPositive = POSITIVE_SIGNALS.some((s) => text.includes(s));
-  const hasNegative = NEGATIVE_SIGNALS.some((s) => text.includes(s));
-  return hasPositive && !hasNegative;
-}
 
 async function redis(command) {
   const res = await fetch(REDIS_URL, {
@@ -59,15 +43,14 @@ async function redis(command) {
   return data.result;
 }
 
-function buildQueries(radius) {
-  return [
-    `"vendor application" food truck within ${radius} miles of ${ANCHOR}`,
-    `"call for vendors" food truck festival near ${ANCHOR}`,
-    `"food truck vendors wanted" OR "seeking food trucks" market fair near ${ANCHOR}`,
-  ];
+function looksLikeVendorCall(lead, positive, negative) {
+  const text = ((lead.title || "") + " " + (lead.snippet || "")).toLowerCase();
+  const hasPositive = positive.some((s) => text.includes(s.toLowerCase()));
+  const hasNegative = negative.some((s) => text.includes(s.toLowerCase()));
+  return hasPositive && !hasNegative;
 }
 
-async function tavilySearch(query) {
+async function tavilySearch(query, excludeDomains) {
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -80,7 +63,7 @@ async function tavilySearch(query) {
       max_results: 8,
       topic: "general",
       country: "united states",
-      exclude_domains: EXCLUDE_DOMAINS,
+      exclude_domains: excludeDomains,
       include_published_date: true,
     }),
   });
@@ -99,15 +82,15 @@ async function tavilySearch(query) {
   }));
 }
 
-async function runDiscovery(radius) {
-  const queries = buildQueries(radius);
-  const batches = await Promise.all(queries.map((q) => tavilySearch(q).catch(() => [])));
+async function runDiscovery(radius, settings) {
+  const queries = settings.queries.map((q) => q.split("{radius}").join(String(radius)));
+  const batches = await Promise.all(queries.map((q) => tavilySearch(q, settings.excludeDomains).catch(() => [])));
   const seen = new Set();
   const leads = [];
   for (const batch of batches) {
     for (const lead of batch) {
       if (!lead.url || seen.has(lead.url)) continue;
-      if (!looksLikeVendorCall(lead)) continue;
+      if (!looksLikeVendorCall(lead, settings.positive, settings.negative)) continue;
       seen.add(lead.url);
       leads.push(lead);
     }
@@ -142,6 +125,9 @@ module.exports = async (req, res) => {
   const forceRefresh = req.query.refresh === "1";
 
   try {
+    const settingsRaw = await redis(["GET", SETTINGS_KEY]);
+    const settings = effectiveSettings(settingsRaw ? JSON.parse(settingsRaw) : null);
+
     if (!forceRefresh) {
       const cachedRaw = await redis(["GET", CACHE_KEY]);
       if (cachedRaw) {
@@ -154,7 +140,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    const leads = await runDiscovery(radius);
+    const leads = await runDiscovery(radius, settings);
     const payload = { radius, fetchedAt: Date.now(), leads };
     await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
     res.status(200).json({ leads, fetchedAt: payload.fetchedAt, radius, cached: false });

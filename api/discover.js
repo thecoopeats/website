@@ -21,6 +21,30 @@ const CACHE_KEY = "spotcheck:leads";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const ANCHOR = "Danbury, CT";
 
+// Noise sources that never carry vendor-call content, only reviews/listings/menus.
+const EXCLUDE_DOMAINS = ["yelp.com", "tripadvisor.com", "pinterest.com", "amazon.com", "ebay.com", "youtube.com"];
+
+// A result has to look like an actual invitation to vend, not general food-truck
+// content — "best trucks in town" roundups, menus, for-sale listings, etc.
+const POSITIVE_SIGNALS = [
+  "vendor application", "call for vendors", "vendors wanted", "seeking vendors",
+  "seeking food trucks", "food truck vendors", "vendor registration", "vendor spot",
+  "vendor fee", "vendor form", "become a vendor", "apply to vend", "food vendor",
+  "vending opportunity", "vendor packet", "vendor rules",
+];
+const NEGATIVE_SIGNALS = [
+  "best food truck", "top 10 food truck", "top food truck", "food trucks near me",
+  "food truck for sale", "food truck menu", "food truck review", "things to do",
+  "our menu", "catering menu", "food truck schedule", "where to find",
+];
+
+function looksLikeVendorCall(lead) {
+  const text = ((lead.title || "") + " " + (lead.snippet || "")).toLowerCase();
+  const hasPositive = POSITIVE_SIGNALS.some((s) => text.includes(s));
+  const hasNegative = NEGATIVE_SIGNALS.some((s) => text.includes(s));
+  return hasPositive && !hasNegative;
+}
+
 async function redis(command) {
   const res = await fetch(REDIS_URL, {
     method: "POST",
@@ -37,9 +61,9 @@ async function redis(command) {
 
 function buildQueries(radius) {
   return [
-    `food truck vendor application within ${radius} miles of ${ANCHOR}`,
-    `call for vendors food truck festival near ${ANCHOR}`,
-    `farmers market food truck vendor sign up near ${ANCHOR}`,
+    `"vendor application" food truck within ${radius} miles of ${ANCHOR}`,
+    `"call for vendors" food truck festival near ${ANCHOR}`,
+    `"food truck vendors wanted" OR "seeking food trucks" market fair near ${ANCHOR}`,
   ];
 }
 
@@ -53,8 +77,10 @@ async function tavilySearch(query) {
     body: JSON.stringify({
       query,
       search_depth: "basic",
-      max_results: 6,
+      max_results: 8,
       topic: "general",
+      country: "united states",
+      exclude_domains: EXCLUDE_DOMAINS,
       include_published_date: true,
     }),
   });
@@ -81,6 +107,7 @@ async function runDiscovery(radius) {
   for (const batch of batches) {
     for (const lead of batch) {
       if (!lead.url || seen.has(lead.url)) continue;
+      if (!looksLikeVendorCall(lead)) continue;
       seen.add(lead.url);
       leads.push(lead);
     }

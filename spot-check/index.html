@@ -353,8 +353,9 @@
           <label>Status
             <select name="status">
               <option value="researching">Researching</option>
+              <option value="contacted">Contacted</option>
               <option value="applied">Applied</option>
-              <option value="confirmed">Confirmed</option>
+              <option value="confirmed">Attending</option>
               <option value="declined">Declined by organizer</option>
               <option value="passed">Passed on it</option>
             </select></label>
@@ -453,8 +454,9 @@
 
   var STATUSES = [
     {key:"researching", label:"Researching"},
+    {key:"contacted", label:"Contacted"},
     {key:"applied", label:"Applied"},
-    {key:"confirmed", label:"Confirmed"},
+    {key:"confirmed", label:"Attending"},
     {key:"declined", label:"Declined"},
     {key:"passed", label:"Passed"}
   ];
@@ -591,7 +593,7 @@
   function renderStats(){
     var events = state.events;
     var tracking = events.length;
-    var pipeline = events.filter(function(e){ return e.status === "applied" || e.status === "confirmed"; }).length;
+    var pipeline = events.filter(function(e){ return e.status === "contacted" || e.status === "applied" || e.status === "confirmed"; }).length;
     var upcoming = events.filter(function(e){
       if (!e.dateStart) return false;
       var d = daysUntil(e.dateStart);
@@ -732,6 +734,7 @@
       '<div class="card" data-id="'+e.id+'">'+
         '<div class="card-top">'+
           '<span class="badge badge-status">'+esc(statusLabel)+'</span>'+
+          (e.gcalEventId ? '<span class="badge badge-example" title="Synced to the public Google Calendar">📅 On calendar</span>' : '')+
           '<span class="legit-indicator" title="Legitimacy: '+v.passed+' of '+v.total+' checks — '+LEVEL_LABEL[v.level]+'">'+
             '<span class="legit-dot" style="background:'+v.color+'"></span>'+
             '<span class="legit-score">'+v.passed+'/'+v.total+'</span>'+
@@ -894,6 +897,48 @@
     apiStore.remove(state.editingId).then(function(){ return refreshList(); }).then(closeDrawer);
   });
 
+  // Auto-syncs to The Coop's real public Google Calendar (the one on
+  // thecoopeats.com's "Find the truck" page) whenever an event's status
+  // is/becomes "Attending", and removes it again if status changes away
+  // from Attending after having been synced. Never blocks the event save
+  // itself -- a calendar failure surfaces as an alert, not a lost edit.
+  function syncCalendarForEvent(saved, previousStatus, previousGcalId){
+    var wasAttending = previousStatus === "confirmed";
+    var isAttending = saved.status === "confirmed";
+
+    if (!isAttending && wasAttending && previousGcalId){
+      return fetch("/api/calendar-sync", {method:"POST", headers: apiHeaders(), body: JSON.stringify({
+        action: "remove", gcalEventId: previousGcalId
+      })}).then(function(){ return apiStore.update(saved.id, {gcalEventId: ""}); })
+        .catch(function(err){ console.error("Calendar remove failed:", err); });
+    }
+
+    if (isAttending){
+      return fetch("/api/calendar-sync", {method:"POST", headers: apiHeaders(), body: JSON.stringify({
+        action: "upsert",
+        name: saved.name,
+        location: saved.location,
+        hours: saved.hours,
+        dateStart: saved.dateStart,
+        dateEnd: saved.dateEnd,
+        gcalEventId: saved.gcalEventId || null
+      })}).then(function(r){
+        return r.json().then(function(body){
+          if (!r.ok) throw new Error(body.error || "Calendar sync failed");
+          return body;
+        });
+      }).then(function(body){
+        if (body.gcalEventId && body.gcalEventId !== saved.gcalEventId){
+          return apiStore.update(saved.id, {gcalEventId: body.gcalEventId});
+        }
+      }).catch(function(err){
+        alert("Saved, but couldn't sync to the public calendar: " + err.message);
+      });
+    }
+
+    return Promise.resolve();
+  }
+
   form.addEventListener("submit", function(ev){
     ev.preventDefault();
     var fd = new FormData(form);
@@ -907,6 +952,12 @@
     data.checklist = readChecklistFromForm();
     data.updatedAt = Date.now();
 
+    var previousStatus = null, previousGcalId = null;
+    if (state.editingId){
+      var existing = state.events.find(function(e){ return e.id === state.editingId; });
+      if (existing){ previousStatus = existing.status; previousGcalId = existing.gcalEventId || null; }
+    }
+
     var op;
     if (state.editingId){
       op = apiStore.update(state.editingId, data);
@@ -914,7 +965,9 @@
       data.createdAt = Date.now();
       op = apiStore.add(data);
     }
-    op.then(function(){ return refreshList(); }).then(closeDrawer).catch(function(err){
+    op.then(function(result){
+      return syncCalendarForEvent(result.event, previousStatus, previousGcalId);
+    }).then(function(){ return refreshList(); }).then(closeDrawer).catch(function(err){
       alert("Couldn't save: " + err.message);
     });
   });

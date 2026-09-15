@@ -88,15 +88,15 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: "Server not configured (passphrase). See api/events.js setup." });
     return;
   }
-  const key = req.headers["x-spotcheck-key"];
-  if (!key || key !== PASSPHRASE) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
   if (!SERVICE_ACCOUNT_EMAIL || !SERVICE_ACCOUNT_KEY) {
     res.status(500).json({
       error: "Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY in the Vercel project's environment variables, then redeploy. Also share the truck's Google Calendar with that service account's email (Settings and sharing > Share with specific people > Make changes to events).",
     });
+    return;
+  }
+  const key = req.headers["x-spotcheck-key"];
+  if (!key || key !== PASSPHRASE) {
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
   if (req.method !== "POST") {

@@ -37,7 +37,13 @@ const TICKETMASTER_API_KEY = process.env.TICKETMASTER_API_KEY;
 
 const CACHE_KEY = "spotcheck:leads";
 const SETTINGS_KEY = "spotcheck:search-settings";
+const DISMISSED_KEY = "spotcheck:dismissed";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// Dismiss keys — must match the format the front end uses when it posts
+// to api/dismiss.js (see spot-check/index.html's dismissKeyFor*).
+function leadDismissKey(lead) { return "lead:" + lead.url; }
+function eventDismissKey(ev) { return "tm:" + (ev.id || ev.url || (ev.name + "|" + ev.startDate)); }
 
 // Ticketmaster needs real coordinates, not free-text location; Danbury is
 // the truck's home base per the distance-from-Danbury field on events too.
@@ -213,6 +219,7 @@ async function findConfirmedEvents(radius) {
     if (!TM_EVENT_SIGNALS.some((s) => name.toLowerCase().includes(s))) continue;
     const venue = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
     out.push({
+      id: ev.id || null,
       name,
       url: ev.url || null,
       startDate: (ev.dates && ev.dates.start && ev.dates.start.localDate) || null,
@@ -252,8 +259,15 @@ module.exports = async (req, res) => {
   const forceRefresh = req.query.refresh === "1";
 
   try {
-    const settingsRaw = await redis(["GET", SETTINGS_KEY]);
+    const [settingsRaw, dismissedFlat] = await Promise.all([
+      redis(["GET", SETTINGS_KEY]),
+      redis(["HGETALL", DISMISSED_KEY]),
+    ]);
     const settings = effectiveSettings(settingsRaw ? JSON.parse(settingsRaw) : null);
+    const dismissedSet = new Set();
+    for (let i = 0; i < (dismissedFlat || []).length; i += 2) dismissedSet.add(dismissedFlat[i]);
+
+    let leads, confirmedEvents, fetchedAt, cachedFlag;
 
     if (!forceRefresh) {
       const cachedRaw = await redis(["GET", CACHE_KEY]);
@@ -261,35 +275,43 @@ module.exports = async (req, res) => {
         const cached = JSON.parse(cachedRaw);
         const age = Date.now() - cached.fetchedAt;
         if (cached.radius === radius && cached.location === settings.location && age < CACHE_TTL_MS) {
-          res.status(200).json({
-            leads: cached.leads,
-            confirmedEvents: cached.confirmedEvents || [],
-            fetchedAt: cached.fetchedAt,
-            radius,
-            location: settings.location,
-            cached: true,
-          });
-          return;
+          leads = cached.leads;
+          confirmedEvents = cached.confirmedEvents || [];
+          fetchedAt = cached.fetchedAt;
+          cachedFlag = true;
         }
       }
     }
 
-    const [leads, confirmedEvents] = await Promise.all([
-      findLeads(radius, settings),
-      findConfirmedEvents(radius).catch((err) => {
-        console.error("Ticketmaster lookup failed:", err && err.message);
-        return [];
-      }),
-    ]);
-    const payload = { radius, location: settings.location, fetchedAt: Date.now(), leads, confirmedEvents };
-    await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
+    if (leads === undefined) {
+      const result = await Promise.all([
+        findLeads(radius, settings),
+        findConfirmedEvents(radius).catch((err) => {
+          console.error("Ticketmaster lookup failed:", err && err.message);
+          return [];
+        }),
+      ]);
+      leads = result[0];
+      confirmedEvents = result[1];
+      fetchedAt = Date.now();
+      cachedFlag = false;
+      const payload = { radius, location: settings.location, fetchedAt, leads, confirmedEvents };
+      await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
+    }
+
+    // Dismissed items are filtered out here rather than at cache-write time,
+    // so a dismiss takes effect immediately even against a cached result,
+    // and a future re-search never needs to "know" about dismissals itself.
+    const filteredLeads = leads.filter((l) => !dismissedSet.has(leadDismissKey(l)));
+    const filteredEvents = confirmedEvents.filter((e) => !dismissedSet.has(eventDismissKey(e)));
+
     res.status(200).json({
-      leads,
-      confirmedEvents,
-      fetchedAt: payload.fetchedAt,
+      leads: filteredLeads,
+      confirmedEvents: filteredEvents,
+      fetchedAt,
       radius,
       location: settings.location,
-      cached: false,
+      cached: cachedFlag,
     });
   } catch (err) {
     res.status(500).json({ error: String((err && err.message) || err) });

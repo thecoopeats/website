@@ -97,6 +97,11 @@
   .confirmed-title a:hover{color:var(--text-accent);text-decoration:underline;}
   .confirmed-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted);margin-top:3px;}
 
+  #dismissed-panel{margin-top:12px;padding-top:12px;border-top:var(--stroke-1) dashed var(--border-soft);}
+  .dismissed-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;font-size:var(--text-2xs);border-bottom:1px solid var(--border-soft);}
+  .dismissed-row:last-child{border-bottom:none;}
+  .dismissed-label{color:var(--text-muted);}
+
   .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;padding-top:12px;border-top:var(--stroke-1) dashed var(--border-soft);}
   .settings-grid textarea{font-family:var(--font-mono);font-size:11.5px;}
   @media (max-width:640px){.settings-grid{grid-template-columns:1fr;}}
@@ -246,7 +251,12 @@
           <label>Within <input type="number" id="discover-radius" value="50" min="1" max="300" step="1"> miles</label>
           <button type="button" class="btn btn-quiet btn-sm" id="btn-refresh-leads">Refresh now</button>
           <button type="button" class="btn btn-quiet btn-sm" id="btn-toggle-settings">Edit search ⚙</button>
+          <button type="button" class="btn btn-quiet btn-sm" id="btn-toggle-dismissed">Dismissed (<span id="dismissed-count">0</span>)</button>
           <span class="panel-hint" id="leads-status"></span>
+        </div>
+
+        <div id="dismissed-panel" hidden>
+          <div id="dismissed-list"></div>
         </div>
 
         <div id="search-settings-form" hidden>
@@ -948,15 +958,38 @@
     return Math.round(hrs / 24) + "d ago";
   }
 
+  // Must match the key format api/discover.js builds server-side
+  // (leadDismissKey / eventDismissKey) so a dismiss actually sticks.
+  function dismissKeyForLead(lead){ return "lead:" + lead.url; }
+  function dismissKeyForEvent(ev){ return "tm:" + (ev.id || ev.url || (ev.name + "|" + ev.startDate)); }
+
+  var currentLeads = [];
+  var currentConfirmedEvents = [];
+  var lastLeadsMeta = null;
+  var dismissedCount = 0;
+
+  function setDismissedCount(n){
+    dismissedCount = n;
+    document.getElementById("dismissed-count").textContent = n;
+  }
+
+  function dismissItem(key, label){
+    return fetch("/api/dismiss", {method:"POST", headers: apiHeaders(), body: JSON.stringify({key: key, label: label})})
+      .then(function(r){ if (!r.ok) throw new Error("Dismiss failed"); return r.json(); })
+      .then(function(){ setDismissedCount(dismissedCount + 1); });
+  }
+
   function renderLeads(leads, meta){
+    currentLeads = leads || [];
+    lastLeadsMeta = meta;
     var listEl = document.getElementById("leads-list");
     var statusEl = document.getElementById("leads-status");
     statusEl.textContent = meta && meta.fetchedAt ? ("Updated " + timeAgo(meta.fetchedAt) + (meta.cached ? "" : " · fresh search")) : "";
-    if (!leads || !leads.length){
+    if (!currentLeads.length){
       listEl.innerHTML = '<p class="lead-empty">No leads found in this radius yet. Try widening it, hitting Refresh, or loosening the filters in Edit search.</p>';
       return;
     }
-    listEl.innerHTML = '<div class="leads-list">' + leads.map(function(lead, i){
+    listEl.innerHTML = '<div class="leads-list">' + currentLeads.map(function(lead, i){
       return (
         '<div class="lead-card" data-idx="'+i+'">'+
           '<div class="lead-top">'+
@@ -964,7 +997,10 @@
               '<div class="lead-title"><a href="'+esc(lead.url)+'" target="_blank" rel="noopener">'+esc(lead.title || lead.url)+'</a></div>'+
               '<div class="lead-url">'+esc(lead.url)+'</div>'+
             '</div>'+
-            '<button type="button" class="btn btn-quiet btn-sm btn-log-lead" data-idx="'+i+'">+ Log as event</button>'+
+            '<div style="display:flex;gap:6px;">'+
+              '<button type="button" class="btn btn-quiet btn-sm btn-log-lead" data-idx="'+i+'">+ Log as event</button>'+
+              '<button type="button" class="btn btn-danger btn-sm btn-dismiss-lead" data-idx="'+i+'">Dismiss</button>'+
+            '</div>'+
           '</div>'+
           (lead.snippet ? '<div class="lead-snippet">'+esc(lead.snippet)+'</div>' : '')+
           (lead.possiblyPast ? '<div class="lead-past-flag">⚠ May already be past (mentions ' + esc(lead.dateGuess) + ')</div>' : '')+
@@ -974,20 +1010,32 @@
     listEl.querySelectorAll(".btn-log-lead").forEach(function(btn){
       btn.addEventListener("click", function(){
         var idx = Number(btn.getAttribute("data-idx"));
-        openDrawerFromLead(leads[idx]);
+        openDrawerFromLead(currentLeads[idx]);
+      });
+    });
+    listEl.querySelectorAll(".btn-dismiss-lead").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var idx = Number(btn.getAttribute("data-idx"));
+        var lead = currentLeads[idx];
+        if (!confirm('Permanently remove "' + (lead.title || lead.url) + '" from future searches?')) return;
+        dismissItem(dismissKeyForLead(lead), lead.title || lead.url).then(function(){
+          currentLeads.splice(idx, 1);
+          renderLeads(currentLeads, lastLeadsMeta);
+        }).catch(function(err){ alert("Couldn't dismiss: " + err.message); });
       });
     });
   }
 
   function renderConfirmedEvents(events){
+    currentConfirmedEvents = events || [];
     var sectionEl = document.getElementById("confirmed-events-section");
     var listEl = document.getElementById("confirmed-events-list");
-    if (!events || !events.length){
+    if (!currentConfirmedEvents.length){
       sectionEl.hidden = true;
       return;
     }
     sectionEl.hidden = false;
-    listEl.innerHTML = events.map(function(ev, i){
+    listEl.innerHTML = currentConfirmedEvents.map(function(ev, i){
       var when = ev.dateTBD ? "Date TBD" : (fmtDate(ev.startDate) || "Date TBD");
       var where = [ev.venueName, ev.city, ev.state].filter(Boolean).join(", ");
       return (
@@ -996,17 +1044,66 @@
             '<div class="confirmed-title"><a href="'+esc(ev.url)+'" target="_blank" rel="noopener">'+esc(ev.name)+'</a></div>'+
             '<div class="confirmed-meta">'+esc(when)+(where ? " · " + esc(where) : "")+'</div>'+
           '</div>'+
-          '<button type="button" class="btn btn-quiet btn-sm btn-log-confirmed" data-idx="'+i+'">+ Log as event</button>'+
+          '<div style="display:flex;gap:6px;">'+
+            '<button type="button" class="btn btn-quiet btn-sm btn-log-confirmed" data-idx="'+i+'">+ Log as event</button>'+
+            '<button type="button" class="btn btn-danger btn-sm btn-dismiss-confirmed" data-idx="'+i+'">Dismiss</button>'+
+          '</div>'+
         '</div>'
       );
     }).join("");
     listEl.querySelectorAll(".btn-log-confirmed").forEach(function(btn){
       btn.addEventListener("click", function(){
         var idx = Number(btn.getAttribute("data-idx"));
-        openDrawerFromConfirmedEvent(events[idx]);
+        openDrawerFromConfirmedEvent(currentConfirmedEvents[idx]);
+      });
+    });
+    listEl.querySelectorAll(".btn-dismiss-confirmed").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var idx = Number(btn.getAttribute("data-idx"));
+        var ev = currentConfirmedEvents[idx];
+        if (!confirm('Permanently remove "' + ev.name + '" from future searches?')) return;
+        dismissItem(dismissKeyForEvent(ev), ev.name).then(function(){
+          currentConfirmedEvents.splice(idx, 1);
+          renderConfirmedEvents(currentConfirmedEvents);
+        }).catch(function(err){ alert("Couldn't dismiss: " + err.message); });
       });
     });
   }
+
+  function loadDismissed(){
+    return fetch("/api/dismiss", {headers: apiHeaders()}).then(function(r){ return r.json(); }).then(function(body){
+      var items = body.dismissed || [];
+      setDismissedCount(items.length);
+      var listEl = document.getElementById("dismissed-list");
+      if (!items.length){
+        listEl.innerHTML = '<p class="lead-empty">Nothing dismissed yet.</p>';
+        return;
+      }
+      listEl.innerHTML = items.map(function(item, i){
+        return (
+          '<div class="dismissed-row" data-idx="'+i+'">'+
+            '<span class="dismissed-label">'+esc(item.label || item.key)+'</span>'+
+            '<button type="button" class="btn btn-quiet btn-sm btn-restore-dismissed" data-key="'+esc(item.key)+'">Restore</button>'+
+          '</div>'
+        );
+      }).join("");
+      listEl.querySelectorAll(".btn-restore-dismissed").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var k = btn.getAttribute("data-key");
+          fetch("/api/dismiss?key=" + encodeURIComponent(k), {method:"DELETE", headers: apiHeaders()})
+            .then(function(r){ if (!r.ok) throw new Error("Restore failed"); return loadDismissed(); })
+            .then(function(){ loadLeads(true); })
+            .catch(function(err){ alert("Couldn't restore: " + err.message); });
+        });
+      });
+    });
+  }
+
+  document.getElementById("btn-toggle-dismissed").addEventListener("click", function(){
+    var panel = document.getElementById("dismissed-panel");
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) loadDismissed();
+  });
 
   function loadLeads(forceRefresh){
     var radius = Number(document.getElementById("discover-radius").value) || 50;
@@ -1128,6 +1225,7 @@
       showApp();
       render();
       loadLeads(false);
+      loadDismissed();
     }).catch(function(err){
       if (err.code === 401){
         try { localStorage.removeItem("spotcheck_key"); } catch(e){}

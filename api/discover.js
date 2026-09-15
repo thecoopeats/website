@@ -52,6 +52,76 @@ function eventDismissKey(ev) { return "tm:" + (ev.id || ev.url || (ev.name + "|"
 const DANBURY_LAT = 41.3948;
 const DANBURY_LNG = -73.4540;
 
+// Approximate Connecticut town-center coordinates, for estimating distance
+// on a confirmed event when only a town name is known (no live geocoding
+// available). Good enough for a rough "~N mi" estimate, not turn-by-turn
+// precision -- Ticketmaster venues with real lat/lng use those instead.
+const CT_TOWN_COORDS = {
+  danbury: [41.3948, -73.4540], hartford: [41.7658, -72.6734],
+  glastonbury: [41.7134, -72.6070], "south glastonbury": [41.6737, -72.5820],
+  colchester: [41.5751, -72.3298], enfield: [41.9762, -72.5904],
+  milford: [41.2223, -73.0565], montville: [41.4573, -72.1546],
+  middletown: [41.5623, -72.6506], manchester: [41.7759, -72.5215],
+  bloomfield: [41.8362, -72.7284], newtown: [41.4137, -73.3032],
+  ridgefield: [41.2815, -73.4979], bethel: [41.3706, -73.4140],
+  brookfield: [41.4826, -73.4029], "new milford": [41.5776, -73.4082],
+  redding: [41.3168, -73.3843], wilton: [41.1954, -73.4379],
+  norwalk: [41.1177, -73.4079], stamford: [41.0534, -73.5387],
+  greenwich: [41.0262, -73.6282], bridgeport: [41.1792, -73.1894],
+  "new haven": [41.3083, -72.9279], waterbury: [41.5582, -73.0515],
+  "new britain": [41.6612, -72.7795], meriden: [41.5382, -72.8070],
+  bristol: [41.6718, -72.9493], "west hartford": [41.7620, -72.7420],
+  fairfield: [41.1408, -73.2613], norwich: [41.5243, -72.0759],
+  "new london": [41.3557, -72.0995], torrington: [41.8007, -73.1212],
+  naugatuck: [41.4859, -73.0509], shelton: [41.3165, -73.0931],
+  stratford: [41.1845, -73.1332], "east hartford": [41.7854, -72.6120],
+  willimantic: [41.7101, -72.2087], windham: [41.7101, -72.2087],
+  southington: [41.6001, -72.8781], cheshire: [41.4995, -72.9006],
+  wallingford: [41.4573, -72.8231], newington: [41.6979, -72.7237],
+  vernon: [41.8437, -72.4759], groton: [41.3501, -72.0787],
+  trumbull: [41.2429, -73.2004], ansonia: [41.3437, -73.0781],
+  derby: [41.3223, -73.0904], wolcott: [41.6009, -72.9840],
+  berlin: [41.6218, -72.7454],
+};
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const R = 3958.8;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function lookupTownCoords(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  // Longest name first so "south glastonbury" matches before "glastonbury".
+  const names = Object.keys(CT_TOWN_COORDS).sort((a, b) => b.length - a.length);
+  for (const name of names) {
+    if (lower.includes(name)) return CT_TOWN_COORDS[name];
+  }
+  return null;
+}
+
+// The configured "Leads near {location}" setting is free text (could be a
+// single town or a list of several) -- resolve it to one anchor point by
+// finding the first known town mentioned, falling back to Danbury (the
+// truck's fixed home base, same anchor Ticketmaster's radius search uses).
+function resolveAnchorCoords(location) {
+  const found = lookupTownCoords(location);
+  return found || [DANBURY_LAT, DANBURY_LNG];
+}
+
+function estimateDistanceMiles(ev, anchor) {
+  if (typeof ev.lat === "number" && typeof ev.lng === "number") {
+    return Math.round(haversineMiles(anchor[0], anchor[1], ev.lat, ev.lng));
+  }
+  const coords = lookupTownCoords([ev.venueName, ev.city, ev.state].filter(Boolean).join(", "));
+  if (!coords) return null;
+  return Math.round(haversineMiles(anchor[0], anchor[1], coords[0], coords[1]));
+}
+
 async function redis(command) {
   const res = await fetch(REDIS_URL, {
     method: "POST",
@@ -243,6 +313,9 @@ async function findConfirmedEvents(radius) {
     const name = ev.name || "";
     if (!TM_EVENT_SIGNALS.some((s) => name.toLowerCase().includes(s))) continue;
     const venue = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
+    const loc = venue && venue.location;
+    const lat = loc && loc.latitude !== undefined ? parseFloat(loc.latitude) : null;
+    const lng = loc && loc.longitude !== undefined ? parseFloat(loc.longitude) : null;
     out.push({
       id: ev.id || null,
       name,
@@ -253,6 +326,8 @@ async function findConfirmedEvents(radius) {
       venueName: venue ? venue.name : null,
       city: venue && venue.city ? venue.city.name : null,
       state: venue && venue.state ? venue.state.stateCode : null,
+      lat: lat !== null && !isNaN(lat) ? lat : null,
+      lng: lng !== null && !isNaN(lng) ? lng : null,
       source: "ticketmaster",
     });
   }
@@ -409,6 +484,15 @@ module.exports = async (req, res) => {
       const payload = { radius, location: settings.location, fetchedAt, leads, confirmedEvents };
       await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
     }
+
+    // Distance from the configured "Leads near {location}" anchor, using
+    // real venue coordinates when Ticketmaster gave us one, else a town-name
+    // lookup — computed fresh every response (cheap, no need to cache it).
+    const anchor = resolveAnchorCoords(settings.location);
+    confirmedEvents = confirmedEvents.map((ev) => {
+      ev.distanceMiles = estimateDistanceMiles(ev, anchor);
+      return ev;
+    });
 
     // A confirmed event has a real date, so re-check "is this already past"
     // even against a cached result — a cache can be up to CACHE_TTL_MS old,

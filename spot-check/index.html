@@ -1043,6 +1043,7 @@
       var when = ev.dateTBD ? "Date TBD" : (fmtDate(ev.startDate) || "Date TBD");
       if (!ev.dateTBD && ev.dateEnd && fmtDate(ev.dateEnd)) when += " – " + fmtDate(ev.dateEnd);
       var where = [ev.venueName, ev.city, ev.state].filter(Boolean).join(", ");
+      if (where && typeof ev.distanceMiles === "number") where += " (~" + ev.distanceMiles + " mi)";
       return (
         '<div class="confirmed-card" data-idx="'+i+'">'+
           '<div>'+

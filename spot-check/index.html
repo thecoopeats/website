@@ -894,7 +894,15 @@
   document.getElementById("btn-delete").addEventListener("click", function(){
     if (!state.editingId) return;
     if (!confirm("Delete this event? This can't be undone.")) return;
-    apiStore.remove(state.editingId).then(function(){ return refreshList(); }).then(closeDrawer);
+    var existing = state.events.find(function(e){ return e.id === state.editingId; });
+    var gcalId = existing && existing.gcalEventId;
+    var cleanup = gcalId
+      ? fetch("/api/calendar-sync", {method:"POST", headers: apiHeaders(), body: JSON.stringify({action:"remove", gcalEventId: gcalId})})
+          .catch(function(err){ console.error("Calendar remove failed:", err); })
+      : Promise.resolve();
+    cleanup.then(function(){
+      return apiStore.remove(state.editingId);
+    }).then(function(){ return refreshList(); }).then(closeDrawer);
   });
 
   // Auto-syncs to The Coop's real public Google Calendar (the one on

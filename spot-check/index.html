@@ -324,6 +324,14 @@
       <button type="button" class="link-reset" id="btn-reset-filters">Reset filters</button>
     </div>
 
+    <div class="filter-row" id="ct-import-banner" style="justify-content:space-between;">
+      <span class="panel-hint">Found 11 festivals listed on <a href="https://ctfoodtrucks.com/food-truck-festivals/" target="_blank" rel="noopener">ctfoodtrucks.com/food-truck-festivals</a> — name, dates, city, and a source link for each (most link to Facebook events; fee/attendance/contact aren't listed there, so those still need your own follow-up).</span>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-import-ctfoodtrucks">Import 11 festivals</button>
+        <button type="button" class="btn btn-quiet btn-sm" id="btn-dismiss-import-banner">Dismiss</button>
+      </div>
+    </div>
+
     <div id="list-region"></div>
   </main>
 </div>
@@ -949,6 +957,63 @@
     document.getElementById("search").value = "";
     renderStatusFilter();
     renderList();
+  });
+
+  // One-time import: festivals scraped from ctfoodtrucks.com/food-truck-festivals/
+  // on 2026-09-15. Fee/attendance/contact aren't listed there, so those stay
+  // blank for the user to fill in after checking each sourceLink themselves.
+  var CT_FOOD_TRUCKS_IMPORT = [
+    {name:"Hartford Food Truck Festival", location:"The Webster, 31 Webster Street, Hartford, CT", dateStart:"2026-08-22", dateEnd:"", sourceLink:"https://thewebsterct.com/event/2nd-annual-hartford-food-truck-festival/the-webster/"},
+    {name:"Glastonbury Food Truck Festival", location:"South Glastonbury, CT", dateStart:"2026-04-25", dateEnd:"2026-04-26", sourceLink:"https://www.facebook.com/events/1187740969683152/"},
+    {name:"Colchester Food & Music Festival", location:"Colchester, CT", dateStart:"2026-04-25", dateEnd:"2026-04-26", sourceLink:"https://www.facebook.com/events/1323934606460430/"},
+    {name:"Colchester Food Truck Festival", location:"Colchester, CT", dateStart:"2026-05-01", dateEnd:"2026-05-03", sourceLink:"https://www.facebook.com/events/943098271619302/"},
+    {name:"The Enfield Food Truck Festival", location:"Enfield, CT", dateStart:"2026-05-10", dateEnd:"2026-05-11", sourceLink:"https://www.facebook.com/events/1409116773838926/"},
+    {name:"Milford Food Truck Festival", location:"Milford, CT", dateStart:"2026-05-23", dateEnd:"2026-05-25", sourceLink:"https://www.facebook.com/events/1129500009136467/1129500012469800/"},
+    {name:"Montville Food Truck Festival", location:"Montville, CT", dateStart:"2026-06-06", dateEnd:"", sourceLink:"https://www.facebook.com/events/891651850089097/"},
+    {name:"Middletown Food Truck Festival", location:"Middletown, CT", dateStart:"2026-06-20", dateEnd:"", sourceLink:"https://www.facebook.com/events/1432820675122796"},
+    {name:"Manchester Food Truck Festival", location:"Manchester, CT", dateStart:"2026-06-19", dateEnd:"2026-06-21", sourceLink:"https://www.facebook.com/events/859976810336013/859976823669345/"},
+    {name:"Bloomfield Food Truck Festival", location:"Bloomfield, CT", dateStart:"2026-09-19", dateEnd:"", organizer:"Bloomfield Chamber of Commerce", sourceLink:"https://bloomfieldchamber.org/bloomfield-food-truck-festival/"},
+    {name:"Colchester Fall Food Truck Festival", location:"Colchester, CT", dateStart:"2026-10-23", dateEnd:"2026-10-25", sourceLink:"https://www.facebook.com/events/1745952583270584/"}
+  ];
+
+  var importBanner = document.getElementById("ct-import-banner");
+  if (localStorage.getItem("spotcheck_ctft_import_dismissed") === "1") importBanner.hidden = true;
+
+  document.getElementById("btn-dismiss-import-banner").addEventListener("click", function(){
+    importBanner.hidden = true;
+    try { localStorage.setItem("spotcheck_ctft_import_dismissed", "1"); } catch(e){}
+  });
+
+  document.getElementById("btn-import-ctfoodtrucks").addEventListener("click", function(){
+    if (!confirm("Import " + CT_FOOD_TRUCKS_IMPORT.length + " festivals from ctfoodtrucks.com? Any already in your list (matched by name) will be skipped.")) return;
+    var existingNames = state.events.map(function(e){ return (e.name || "").toLowerCase().trim(); });
+    var toAdd = CT_FOOD_TRUCKS_IMPORT.filter(function(item){ return existingNames.indexOf(item.name.toLowerCase().trim()) === -1; });
+    if (!toAdd.length){
+      alert("All of these are already in your list.");
+      return;
+    }
+    Promise.all(toAdd.map(function(item){
+      return apiStore.add({
+        name: item.name,
+        organizer: item.organizer || "",
+        eventType: "Festival",
+        status: "researching",
+        dateStart: item.dateStart || "",
+        dateEnd: item.dateEnd || "",
+        location: item.location || "",
+        sourceLink: item.sourceLink || "",
+        notes: "Imported from ctfoodtrucks.com/food-truck-festivals/ — verify vendor fee, attendance, and contact details before applying.",
+        checklist: {},
+        createdAt: Date.now()
+      });
+    })).then(function(){ return refreshList(); }).then(function(){
+      importBanner.hidden = true;
+      try { localStorage.setItem("spotcheck_ctft_import_dismissed", "1"); } catch(e){}
+      var skipped = CT_FOOD_TRUCKS_IMPORT.length - toAdd.length;
+      alert("Added " + toAdd.length + " festival(s)." + (skipped ? " " + skipped + " already existed and were skipped." : ""));
+    }).catch(function(err){
+      alert("Import failed partway through: " + err.message);
+    });
   });
 
   function timeAgo(ms){

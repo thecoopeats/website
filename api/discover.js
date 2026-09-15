@@ -8,11 +8,13 @@
 //    lead also carries a best-effort dateGuess/possiblyPast flag, parsed
 //    from any date mentioned in its title/snippet, since Tavily has no
 //    concept of "is this event still upcoming."
-//  - Ticketmaster Discovery API for "confirmedEvents" — real festivals/
-//    fairs/markets with real start dates and real lat/lng radius search,
-//    filtered to startDateTime >= now server-side. Ticketmaster is
-//    optional: if TICKETMASTER_API_KEY isn't set, confirmedEvents is
-//    just empty and the rest of the endpoint still works.
+//  - "confirmedEvents" — real, dated events, from two sources merged
+//    together: the Ticketmaster Discovery API (real lat/lng radius search,
+//    optional — skips cleanly if TICKETMASTER_API_KEY isn't set) and a
+//    direct scrape of ctfoodtrucks.com/food-truck-festivals/ (plain
+//    server-rendered HTML, no API needed). Both are filtered to
+//    known-past dates dropped outright — these have real dates, unlike
+//    Tavily leads, so there's no reason to just flag a past one.
 //
 // The queries and include/exclude keyword lists (Tavily side) are
 // user-editable via api/search-settings.js (stored in Redis); this file
@@ -246,13 +248,95 @@ async function findConfirmedEvents(radius) {
       name,
       url: ev.url || null,
       startDate: (ev.dates && ev.dates.start && ev.dates.start.localDate) || null,
+      dateEnd: (ev.dates && ev.dates.end && ev.dates.end.localDate) || null,
       dateTBD: !!(ev.dates && ev.dates.start && (ev.dates.start.dateTBD || ev.dates.start.dateTBA)),
       venueName: venue ? venue.name : null,
       city: venue && venue.city ? venue.city.name : null,
       state: venue && venue.state ? venue.state.stateCode : null,
+      source: "ticketmaster",
     });
   }
   return out;
+}
+
+const CTFT_MONTHS = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6,
+  august: 7, september: 8, october: 9, november: 10, december: 11,
+};
+
+// Same month for both ends, e.g. "August 22, 2026" or "April 25 - 26, 2026" —
+// matches every date format actually seen on the page; a cross-month range
+// would just fail to parse and get skipped (never guessed).
+function parseCtftDateRange(text) {
+  const m = text.match(/([A-Za-z]+)\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?,\s*(\d{4})/);
+  if (!m) return null;
+  const month = CTFT_MONTHS[m[1].toLowerCase()];
+  if (month === undefined) return null;
+  const day1 = parseInt(m[2], 10);
+  const day2 = m[3] ? parseInt(m[3], 10) : day1;
+  const year = parseInt(m[4], 10);
+  const start = new Date(year, month, day1);
+  const end = new Date(year, month, day2);
+  if (isNaN(start.getTime())) return null;
+  return { start, end: isNaN(end.getTime()) ? start : end };
+}
+
+function toISODate(d) { return d.toISOString().slice(0, 10); }
+
+// Plain server-rendered HTML (confirmed via curl, no JS execution needed),
+// parsed with targeted regexes rather than a DOM library to keep this
+// dependency-free. Fragile by nature — if the site's markup changes this
+// silently returns fewer/zero results rather than throwing, so it degrades
+// instead of breaking the rest of the endpoint.
+async function findCtFoodTrucksEvents() {
+  let html;
+  try {
+    const res = await fetch("https://ctfoodtrucks.com/food-truck-festivals/");
+    if (!res.ok) { console.error("ctfoodtrucks.com fetch failed:", res.status); return []; }
+    html = await res.text();
+  } catch (err) {
+    console.error("ctfoodtrucks.com fetch failed:", err && err.message);
+    return [];
+  }
+
+  const out = [];
+  const chunks = html.split("<h3>").slice(1);
+  for (const chunk of chunks) {
+    try {
+      const nameMatch = chunk.match(/^([^<]+)<\/h3>/);
+      if (!nameMatch) continue;
+      const name = nameMatch[1].trim();
+
+      const dateMatch = chunk.match(/<\/svg>\s*([A-Za-z]+\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4})\s*<\/span>/);
+      const parsed = dateMatch ? parseCtftDateRange(dateMatch[1]) : null;
+      if (!parsed) continue; // no confident date -- skip rather than guess
+
+      // Hard filter: this source has real dates, so a past one is dropped
+      // outright (unlike Tavily leads, whose guessed dates only get flagged).
+      if (parsed.end.getTime() < Date.now() - 86400000) continue;
+
+      const cityMatch = chunk.match(/class="address"><svg[\s\S]*?<\/svg>\s*([^<]+)<\/span>/);
+      const linkMatch = chunk.match(/class="event-links"\s+href="([^"]+)"/);
+
+      const startISO = toISODate(parsed.start);
+      const endISO = toISODate(parsed.end);
+      out.push({
+        id: "ctft:" + name,
+        name,
+        url: linkMatch ? linkMatch[1].trim() : null,
+        startDate: startISO,
+        dateEnd: endISO !== startISO ? endISO : null,
+        dateTBD: false,
+        venueName: null,
+        city: cityMatch ? cityMatch[1].trim() : null,
+        state: "CT",
+        source: "ctfoodtrucks",
+      });
+    } catch (e) {
+      console.error("ctfoodtrucks.com entry parse failed:", e && e.message);
+    }
+  }
+  return out.slice(0, 30);
 }
 
 module.exports = async (req, res) => {
@@ -313,14 +397,27 @@ module.exports = async (req, res) => {
           console.error("Ticketmaster lookup failed:", err && err.message);
           return [];
         }),
+        findCtFoodTrucksEvents().catch((err) => {
+          console.error("ctfoodtrucks.com lookup failed:", err && err.message);
+          return [];
+        }),
       ]);
       leads = result[0];
-      confirmedEvents = result[1];
+      confirmedEvents = result[1].concat(result[2]);
       fetchedAt = Date.now();
       cachedFlag = false;
       const payload = { radius, location: settings.location, fetchedAt, leads, confirmedEvents };
       await redis(["SET", CACHE_KEY, JSON.stringify(payload)]);
     }
+
+    // A confirmed event has a real date, so re-check "is this already past"
+    // even against a cached result — a cache can be up to CACHE_TTL_MS old,
+    // long enough for something to have quietly happened in the meantime.
+    confirmedEvents = confirmedEvents.filter((ev) => {
+      const d = ev.dateEnd || ev.startDate;
+      if (!d) return true; // no known date (e.g. dateTBD) -- don't hide it
+      return new Date(d + "T23:59:59").getTime() >= Date.now();
+    });
 
     // Dismissed items are filtered out here rather than at cache-write time,
     // so a dismiss takes effect immediately even against a cached result,

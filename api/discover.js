@@ -123,26 +123,32 @@ function guessLatestDate(text) {
   return found.reduce((latest, d) => (d > latest ? d : latest));
 }
 
-async function tavilySearch(query, excludeDomains) {
+async function tavilySearch(query, opts) {
+  opts = opts || {};
+  const body = {
+    query,
+    search_depth: "basic",
+    max_results: 8,
+    topic: "general",
+    country: "united states",
+    include_published_date: true,
+  };
+  if (opts.excludeDomains && opts.excludeDomains.length) body.exclude_domains = opts.excludeDomains;
+  if (opts.includeDomains && opts.includeDomains.length) {
+    body.include_domains = opts.includeDomains;
+    body.include_domains_mode = opts.includeDomainsMode || "boost";
+  }
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
       Authorization: "Bearer " + TAVILY_API_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      query,
-      search_depth: "basic",
-      max_results: 8,
-      topic: "general",
-      country: "united states",
-      exclude_domains: excludeDomains,
-      include_published_date: true,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || body.error || ("Tavily HTTP " + res.status));
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || errBody.error || ("Tavily HTTP " + res.status));
   }
   const data = await res.json();
   return (data.results || []).map((r) => ({
@@ -155,14 +161,31 @@ async function tavilySearch(query, excludeDomains) {
   }));
 }
 
+// Craigslist is plain, crawlable HTML (unlike Facebook/NextDoor) and its
+// gigs/events sections do carry real local vendor posts, so it gets its
+// own hard-scoped call rather than relying on the generic queries above.
+function craigslistQuery(settings) {
+  return "food truck vendor OR gigs near " + settings.location;
+}
+
 async function findLeads(radius, settings) {
   const queries = settings.queries.map((q) =>
     q.split("{radius}").join(String(radius)).split("{location}").join(settings.location)
   );
+
+  const tasks = queries.map((q) => ({
+    query: q,
+    opts: { excludeDomains: settings.excludeDomains, includeDomains: settings.boostDomains, includeDomainsMode: "boost" },
+  }));
+  tasks.push({
+    query: craigslistQuery(settings),
+    opts: { includeDomains: ["craigslist.org"], includeDomainsMode: "filter" },
+  });
+
   const batches = await Promise.all(
-    queries.map((q) =>
-      tavilySearch(q, settings.excludeDomains).catch((err) => {
-        console.error("Tavily query failed:", q, err && err.message);
+    tasks.map((t) =>
+      tavilySearch(t.query, t.opts).catch((err) => {
+        console.error("Tavily query failed:", t.query, err && err.message);
         return [];
       })
     )

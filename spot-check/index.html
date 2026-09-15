@@ -273,6 +273,8 @@
               <textarea id="set-negative" rows="4"></textarea></label>
             <label>Exclude these domains <span class="hint">one per line, e.g. yelp.com</span>
               <textarea id="set-domains" rows="3"></textarea></label>
+            <label>Boost these domains <span class="hint">one per line — ranked higher, rest of the web still searched too. Add your town's .gov or chamber site if you know it.</span>
+              <textarea id="set-boost-domains" rows="3"></textarea></label>
           </div>
           <div class="panel-row" style="margin-top:10px;">
             <button type="button" class="btn btn-primary btn-sm" id="btn-save-settings">Save &amp; search</button>
@@ -1140,6 +1142,7 @@
     document.getElementById("set-positive").value = arrayToLines(settings.positive);
     document.getElementById("set-negative").value = arrayToLines(settings.negative);
     document.getElementById("set-domains").value = arrayToLines(settings.excludeDomains);
+    document.getElementById("set-boost-domains").value = arrayToLines(settings.boostDomains);
   }
 
   var settingsLoaded = false;
@@ -1167,7 +1170,8 @@
       queries: linesToArray(document.getElementById("set-queries").value),
       positive: linesToArray(document.getElementById("set-positive").value),
       negative: linesToArray(document.getElementById("set-negative").value),
-      excludeDomains: linesToArray(document.getElementById("set-domains").value)
+      excludeDomains: linesToArray(document.getElementById("set-domains").value),
+      boostDomains: linesToArray(document.getElementById("set-boost-domains").value)
     };
     fetch("/api/search-settings", {method:"PUT", headers: apiHeaders(), body: JSON.stringify(payload)})
       .then(function(r){ if (!r.ok) throw new Error("Save failed"); return r.json(); })

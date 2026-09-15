@@ -28,8 +28,33 @@ function base64url(buf) {
   return buf.toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
+// Tolerates the common ways a private key gets mangled in transit through a
+// dashboard textarea: wrapped in quotes, the whole service-account JSON
+// pasted instead of just the private_key field, \r\n line endings, or extra
+// surrounding whitespace.
+function resolvePrivateKey() {
+  let raw = (SERVICE_ACCOUNT_KEY || "").trim();
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+    raw = raw.slice(1, -1);
+  }
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.private_key) raw = parsed.private_key;
+    } catch (e) { /* not valid JSON -- fall through and let the format check below catch it */ }
+  }
+  raw = raw.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").trim();
+  if (!raw.includes("BEGIN") || !raw.includes("PRIVATE KEY")) {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY doesn't look like a PEM key (no BEGIN/PRIVATE KEY markers found). " +
+      "Paste just the private_key value from the service account's JSON file, including the -----BEGIN/END----- lines."
+    );
+  }
+  return raw;
+}
+
 async function getAccessToken() {
-  const key = (SERVICE_ACCOUNT_KEY || "").replace(/\\n/g, "\n");
+  const key = resolvePrivateKey();
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })));
   const claims = base64url(Buffer.from(JSON.stringify({
@@ -40,10 +65,19 @@ async function getAccessToken() {
     exp: now + 3600,
   })));
   const unsigned = header + "." + claims;
-  const signer = crypto.createSign("RSA-SHA256");
-  signer.update(unsigned);
-  signer.end();
-  const signature = base64url(signer.sign(key));
+  let signature;
+  try {
+    const signer = crypto.createSign("RSA-SHA256");
+    signer.update(unsigned);
+    signer.end();
+    signature = base64url(signer.sign(key));
+  } catch (err) {
+    throw new Error(
+      "Couldn't sign with GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (" + (err && err.message) + "). " +
+      "This usually means the pasted key got corrupted in transit -- re-copy the exact private_key value " +
+      "from the service account's JSON file (open it in a plain text editor, not a viewer that might reformat it)."
+    );
+  }
   const jwt = unsigned + "." + signature;
 
   const res = await fetch("https://oauth2.googleapis.com/token", {

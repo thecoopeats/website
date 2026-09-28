@@ -92,6 +92,13 @@ module.exports = async (req, res) => {
           allowedContentTypes: ALLOWED_TYPES,
           addRandomSuffix: true,
           maximumSizeInBytes: 500 * 1024 * 1024,
+          // Hardcoded rather than left to auto-detect from Vercel's system env
+          // vars: on this project that was resolving to a host that never
+          // actually received the onUploadCompleted webhook (likely an
+          // apex/www or *.vercel.app mismatch), so the media library never
+          // got its Redis entry written. Update this if the production
+          // domain ever changes.
+          callbackUrl: "https://www.thecoopeats.com/api/social-upload-token",
           tokenPayload: JSON.stringify({ filename: payload.filename || pathname }),
         };
       },

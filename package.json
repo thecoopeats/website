@@ -1,0 +1,7 @@
+{
+  "name": "the-coop-website",
+  "private": true,
+  "dependencies": {
+    "@vercel/blob": "^0.27.1"
+  }
+}

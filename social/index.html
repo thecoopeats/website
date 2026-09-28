@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Social Poster — The Coop</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  :root{
+    --status-scheduled-bg:#FDEAE0; --status-scheduled-fg:#8a4b12;
+    --status-posted-bg:#E7F4E3; --status-posted-fg:#2c6b1f;
+    --status-failed-bg:#FCE1E1; --status-failed-fg:var(--coop-red);
+    --status-partial-bg:#FDEAE0; --status-partial-fg:#8a4b12;
+    --status-canceled-bg:var(--gray-100,#eee); --status-canceled-fg:var(--text-muted);
+    --status-posting-bg:#E4EEF9; --status-posting-fg:#1e5a96;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--surface-page);color:var(--text-body);font-family:var(--font-body);font-weight:var(--weight-body);line-height:var(--leading-body);}
+  button,input,select,textarea{font-family:inherit;color:inherit;}
+  h1,h2,h3{text-wrap:balance;margin:0;}
+  [hidden]{display:none !important;}
+  a{color:var(--text-accent);}
+  :focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}
+
+  .eyebrow{font-family:var(--font-mono);font-size:var(--text-3xs);font-weight:600;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-muted);}
+
+  #gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--surface-board);}
+  .gate-card{background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-lg);box-shadow:var(--shadow-sticker-lg);padding:32px;max-width:360px;width:100%;text-align:center;}
+  .gate-card img{height:52px;margin-bottom:14px;}
+  .gate-card h1{font-family:var(--font-poster);font-weight:400;font-size:var(--text-xl);margin-bottom:6px;}
+  .gate-card p{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 18px;}
+  .gate-card input{width:100%;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:10px 12px;font-size:var(--text-sm);text-align:center;letter-spacing:.08em;margin-bottom:12px;}
+  .gate-error{color:var(--coop-red);font-size:var(--text-2xs);font-weight:700;min-height:16px;margin-bottom:8px;}
+
+  .masthead{background:var(--surface-board);color:var(--text-on-black);padding:20px clamp(16px,4vw,40px) 0;}
+  .masthead-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:18px;}
+  .wordmark{display:flex;align-items:center;gap:12px;}
+  .wordmark img{height:40px;width:auto;display:block;}
+  .wordmark-text h1{font-family:var(--font-poster);font-weight:400;font-size:var(--text-xl);color:#fff;letter-spacing:.01em;}
+  .wordmark-text .tagline{font-family:var(--font-mono);font-size:var(--text-3xs);color:var(--gray-400);text-transform:uppercase;letter-spacing:var(--tracking-caps);margin-top:2px;}
+  .head-actions{display:flex;align-items:center;gap:8px;}
+  .dash-strip{height:4px;background:var(--coop-red);}
+
+  .btn{appearance:none;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:9px 16px;font-family:var(--font-body);font-weight:700;font-size:var(--text-xs);cursor:pointer;display:inline-flex;align-items:center;gap:8px;line-height:1;box-shadow:var(--shadow-sticker-press);transform:translate(-1px,-1px);transition:transform .1s ease, box-shadow .1s ease;}
+  .btn:hover{transform:translate(-2px,-2px);box-shadow:var(--shadow-sticker);}
+  .btn:active{transform:translate(0,0);box-shadow:0 0 0 var(--border-hard);}
+  .btn-primary{background:var(--surface-accent);color:var(--text-on-red);}
+  .btn-ghost{background:transparent;border-color:#565149;color:#f2f0ea;}
+  .btn-quiet{background:var(--surface-card);border-color:var(--border-hard);color:var(--text-body);}
+  .btn-danger{background:var(--status-failed-bg);border-color:var(--coop-red);color:var(--coop-red);}
+  .btn[disabled]{opacity:.5;cursor:not-allowed;}
+  .btn-sm{padding:6px 11px;font-size:var(--text-2xs);border-width:var(--stroke-1);}
+
+  main{max-width:var(--max-content);margin:0 auto;padding:24px clamp(16px,4vw,40px) 80px;}
+
+  .panel{background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:20px;box-shadow:var(--shadow-card);}
+  .panel h2{font-family:var(--font-poster);font-weight:400;font-size:var(--text-md);margin-bottom:12px;}
+
+  .dropzone{border:var(--stroke-2) dashed var(--border-hard);border-radius:var(--radius-md);padding:28px 16px;text-align:center;cursor:pointer;color:var(--text-muted);font-size:var(--text-xs);transition:background .1s ease;}
+  .dropzone.drag{background:var(--status-scheduled-bg);}
+  .upload-rows{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
+  .upload-row{display:flex;align-items:center;gap:8px;font-size:var(--text-2xs);}
+  .upload-row .bar{flex:1;height:6px;border-radius:3px;background:var(--gray-100,#eee);overflow:hidden;}
+  .upload-row .bar > i{display:block;height:100%;background:var(--coop-red);width:0%;transition:width .15s ease;}
+  .upload-row.error .bar{background:var(--status-failed-bg);}
+  .upload-row .name{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:14px;}
+  .media-tile{position:relative;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);overflow:hidden;aspect-ratio:1;cursor:pointer;background:#000;}
+  .media-tile img, .media-tile video{width:100%;height:100%;object-fit:cover;display:block;}
+  .media-tile.selected{outline:3px solid var(--coop-red);outline-offset:2px;}
+  .media-tile .kind-badge{position:absolute;top:4px;left:4px;background:rgba(10,10,10,.7);color:#fff;font-family:var(--font-mono);font-size:9px;padding:2px 5px;border-radius:4px;text-transform:uppercase;}
+  .media-tile .del-btn{position:absolute;top:4px;right:4px;background:rgba(10,10,10,.7);color:#fff;border:none;border-radius:4px;width:20px;height:20px;line-height:1;cursor:pointer;font-size:13px;}
+  .media-empty{color:var(--text-muted);font-size:var(--text-xs);padding:12px 0;}
+
+  .composer{display:none;gap:16px;}
+  .composer.open{display:flex;flex-wrap:wrap;}
+  .composer-preview{width:180px;flex-shrink:0;}
+  .composer-preview img, .composer-preview video{width:100%;border-radius:var(--radius-sm);border:var(--stroke-2) solid var(--border-hard);display:block;}
+  .composer-fields{flex:1;min-width:260px;display:flex;flex-direction:column;gap:10px;}
+  .composer-fields textarea{width:100%;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:10px;font-size:var(--text-sm);resize:vertical;min-height:70px;}
+  .composer-fields label.check{display:inline-flex;align-items:center;gap:6px;font-size:var(--text-xs);font-weight:700;}
+  .target-row{display:flex;gap:16px;}
+  .schedule-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:var(--text-xs);}
+  .schedule-row input[type=datetime-local]{border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:7px 9px;}
+  .ig-caption-toggle{font-size:var(--text-2xs);color:var(--text-accent);background:none;border:none;text-decoration:underline;cursor:pointer;padding:0;text-align:left;}
+  .composer-status{font-size:var(--text-2xs);min-height:16px;}
+  .composer-status.error{color:var(--coop-red);font-weight:700;}
+  .composer-status.ok{color:#2c6b1f;font-weight:700;}
+
+  table.posts{width:100%;border-collapse:collapse;font-size:var(--text-xs);}
+  table.posts th{text-align:left;font-family:var(--font-mono);font-size:var(--text-3xs);text-transform:uppercase;letter-spacing:var(--tracking-caps);color:var(--text-muted);padding:6px 8px;border-bottom:var(--stroke-1) solid var(--border-hard);}
+  table.posts td{padding:8px;border-bottom:1px solid var(--gray-100,#eee);vertical-align:top;}
+  table.posts .thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;border:var(--stroke-1) solid var(--border-hard);display:block;background:#000;}
+  .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:var(--text-3xs);font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  .badge-scheduled{background:var(--status-scheduled-bg);color:var(--status-scheduled-fg);}
+  .badge-posting{background:var(--status-posting-bg);color:var(--status-posting-fg);}
+  .badge-posted{background:var(--status-posted-bg);color:var(--status-posted-fg);}
+  .badge-partial{background:var(--status-partial-bg);color:var(--status-partial-fg);}
+  .badge-failed{background:var(--status-failed-bg);color:var(--status-failed-fg);}
+  .badge-canceled{background:var(--status-canceled-bg);color:var(--status-canceled-fg);}
+  .result-line{font-size:var(--text-3xs);color:var(--text-muted);margin-top:2px;}
+  .result-line.err{color:var(--coop-red);}
+  .caption-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  @media (max-width:640px){
+    .composer.open{flex-direction:column;}
+    .composer-preview{width:100%;max-width:220px;}
+    table.posts{font-size:11px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-card">
+    <img src="/assets/logo-coop.png" alt="The Coop">
+    <h1>Social Poster</h1>
+    <p>Post to Facebook &amp; Instagram. Enter the passphrase to continue.</p>
+    <form id="gate-form">
+      <input type="password" id="gate-input" autocomplete="current-password" placeholder="Passphrase" required>
+      <div class="gate-error" id="gate-error"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Unlock</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-root" hidden>
+  <div class="masthead">
+    <div class="masthead-inner">
+      <div class="wordmark">
+        <img src="/assets/logo-coop-knockout.png" alt="The Coop">
+        <div class="wordmark-text">
+          <h1>Social Poster</h1>
+          <div class="tagline">Upload once, post everywhere</div>
+        </div>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost btn-sm" id="btn-lock">Lock</button>
+      </div>
+    </div>
+  </div>
+  <div class="dash-strip"></div>
+
+  <main>
+    <div class="panel">
+      <h2>Media library</h2>
+      <div class="dropzone" id="dropzone">
+        Drop photos or videos here, or click to choose files.
+        <input type="file" id="file-input" accept="image/*,video/*" multiple hidden>
+      </div>
+      <div class="upload-rows" id="upload-rows"></div>
+      <div class="media-grid" id="media-grid"></div>
+      <div class="media-empty" id="media-empty" hidden>No media uploaded yet.</div>
+    </div>
+
+    <div class="panel">
+      <h2>New post</h2>
+      <p class="composer-status" id="composer-hint">Select a photo or video from your library above to get started.</p>
+      <div class="composer" id="composer">
+        <div class="composer-preview" id="composer-preview"></div>
+        <div class="composer-fields">
+          <textarea id="caption" placeholder="Write a caption..." maxlength="2200"></textarea>
+          <button type="button" class="ig-caption-toggle" id="ig-caption-toggle">+ Use a different caption for Instagram</button>
+          <textarea id="caption-ig" placeholder="Instagram caption..." maxlength="2200" hidden></textarea>
+
+          <div class="target-row">
+            <label class="check"><input type="checkbox" id="target-fb" checked> Facebook</label>
+            <label class="check"><input type="checkbox" id="target-ig" checked> Instagram</label>
+          </div>
+
+          <div class="schedule-row">
+            <label class="check"><input type="radio" name="when" id="when-now" value="now" checked> Post now</label>
+            <label class="check"><input type="radio" name="when" id="when-later" value="later"> Schedule for</label>
+            <input type="datetime-local" id="schedule-at" disabled>
+          </div>
+
+          <div>
+            <button type="button" class="btn btn-primary" id="btn-submit">Post now</button>
+          </div>
+          <div class="composer-status" id="composer-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Scheduled &amp; posted</h2>
+      <div style="overflow-x:auto;">
+        <table class="posts" id="posts-table">
+          <thead>
+            <tr><th></th><th>Caption</th><th>Targets</th><th>Status</th><th>When</th><th></th></tr>
+          </thead>
+          <tbody id="posts-tbody"></tbody>
+        </table>
+      </div>
+      <div class="media-empty" id="posts-empty" hidden>No posts yet.</div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+import { upload } from "https://esm.sh/@vercel/blob/client";
+
+var passKey = null;
+var state = { media: [], posts: [], selectedMediaId: null };
+
+function apiHeaders(extra){
+  var h = { "Content-Type": "application/json", "x-social-key": passKey };
+  if (extra) Object.assign(h, extra);
+  return h;
+}
+
+function handleAuthAware(r){
+  if (r.status === 401){ var e = new Error("Incorrect passphrase."); e.code = 401; throw e; }
+  if (!r.ok) return r.json().catch(function(){return {};}).then(function(b){ throw new Error(b.error || ("HTTP " + r.status)); });
+  return r.json();
+}
+
+function fetchMedia(){
+  return fetch("/api/social-media", { headers: apiHeaders() }).then(handleAuthAware).then(function(b){ return b.media || []; });
+}
+function deleteMedia(id){
+  return fetch("/api/social-media?id=" + encodeURIComponent(id), { method: "DELETE", headers: apiHeaders() }).then(handleAuthAware);
+}
+function fetchPosts(){
+  return fetch("/api/social-posts", { headers: apiHeaders() }).then(handleAuthAware).then(function(b){ return b.posts || []; });
+}
+function createPost(data){
+  return fetch("/api/social-posts", { method: "POST", headers: apiHeaders(), body: JSON.stringify(data) }).then(handleAuthAware);
+}
+function cancelPost(id){
+  return fetch("/api/social-posts?id=" + encodeURIComponent(id), { method: "DELETE", headers: apiHeaders() }).then(handleAuthAware);
+}
+
+function escapeHtml(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+  });
+}
+
+function mediaThumbHtml(item){
+  if (item.kind === "video") {
+    return '<video src="' + item.url + '" muted playsinline preload="metadata"></video>';
+  }
+  return '<img src="' + item.url + '" alt="">';
+}
+
+function renderMedia(){
+  var grid = document.getElementById("media-grid");
+  var empty = document.getElementById("media-empty");
+  grid.innerHTML = "";
+  empty.hidden = state.media.length > 0;
+  state.media.forEach(function(item){
+    var tile = document.createElement("div");
+    tile.className = "media-tile" + (item.id === state.selectedMediaId ? " selected" : "");
+    tile.innerHTML = mediaThumbHtml(item) +
+      '<span class="kind-badge">' + item.kind + '</span>' +
+      '<button type="button" class="del-btn" title="Delete" data-id="' + item.id + '">×</button>';
+    tile.addEventListener("click", function(ev){
+      if (ev.target.classList.contains("del-btn")) return;
+      selectMedia(item.id);
+    });
+    tile.querySelector(".del-btn").addEventListener("click", function(ev){
+      ev.stopPropagation();
+      if (!confirm("Delete this file? This can't be undone.")) return;
+      deleteMedia(item.id).then(function(){
+        if (state.selectedMediaId === item.id) selectMedia(null);
+        return refreshMedia();
+      }).catch(function(err){ alert("Couldn't delete: " + err.message); });
+    });
+    grid.appendChild(tile);
+  });
+}
+
+function selectMedia(id){
+  state.selectedMediaId = id;
+  renderMedia();
+  renderComposer();
+}
+
+function renderComposer(){
+  var hint = document.getElementById("composer-hint");
+  var composer = document.getElementById("composer");
+  var item = state.media.find(function(m){ return m.id === state.selectedMediaId; });
+  if (!item) {
+    composer.classList.remove("open");
+    hint.hidden = false;
+    return;
+  }
+  hint.hidden = true;
+  composer.classList.add("open");
+  document.getElementById("composer-preview").innerHTML = mediaThumbHtml(item);
+  document.getElementById("composer-result").textContent = "";
+  document.getElementById("composer-result").className = "composer-status";
+}
+
+function updateSubmitLabel(){
+  var later = document.getElementById("when-later").checked;
+  document.getElementById("btn-submit").textContent = later ? "Schedule post" : "Post now";
+}
+
+function renderPosts(){
+  var tbody = document.getElementById("posts-tbody");
+  var empty = document.getElementById("posts-empty");
+  tbody.innerHTML = "";
+  empty.hidden = state.posts.length > 0;
+
+  state.posts.forEach(function(post){
+    var tr = document.createElement("tr");
+    var when = post.status === "scheduled"
+      ? new Date(post.scheduledFor).toLocaleString()
+      : (post.postedAt ? new Date(post.postedAt).toLocaleString() : new Date(post.createdAt).toLocaleString());
+
+    var resultsHtml = "";
+    if (post.results) {
+      Object.keys(post.results).forEach(function(platform){
+        var r = post.results[platform];
+        if (r.ok) {
+          resultsHtml += '<div class="result-line">' + platform + ': posted' + (r.permalink ? ' — <a href="' + r.permalink + '" target="_blank" rel="noopener">view</a>' : '') + '</div>';
+        } else {
+          resultsHtml += '<div class="result-line err">' + platform + ': ' + escapeHtml(r.error) + '</div>';
+        }
+      });
+    }
+
+    var actionHtml = post.status === "scheduled"
+      ? '<button type="button" class="btn btn-sm btn-danger cancel-btn" data-id="' + post.id + '">Cancel</button>'
+      : "";
+
+    tr.innerHTML =
+      '<td>' + mediaThumbHtml({ kind: post.kind, url: post.mediaUrl }).replace("<img ", '<img class="thumb" ').replace("<video ", '<video class="thumb" ') + '</td>' +
+      '<td class="caption-cell" title="' + escapeHtml(post.caption) + '">' + escapeHtml(post.caption || "(no caption)") + '</td>' +
+      '<td>' + post.targets.join(", ") + '</td>' +
+      '<td><span class="badge badge-' + post.status + '">' + post.status + '</span>' + resultsHtml + '</td>' +
+      '<td>' + when + '</td>' +
+      '<td>' + actionHtml + '</td>';
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".cancel-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      cancelPost(btn.getAttribute("data-id")).then(refreshPosts).catch(function(err){ alert("Couldn't cancel: " + err.message); });
+    });
+  });
+}
+
+function refreshMedia(){
+  return fetchMedia().then(function(media){ state.media = media; renderMedia(); });
+}
+function refreshPosts(){
+  return fetchPosts().then(function(posts){ state.posts = posts; renderPosts(); });
+}
+
+/* Upload */
+var dropzone = document.getElementById("dropzone");
+var fileInput = document.getElementById("file-input");
+var uploadRows = document.getElementById("upload-rows");
+
+dropzone.addEventListener("click", function(){ fileInput.click(); });
+dropzone.addEventListener("dragover", function(ev){ ev.preventDefault(); dropzone.classList.add("drag"); });
+dropzone.addEventListener("dragleave", function(){ dropzone.classList.remove("drag"); });
+dropzone.addEventListener("drop", function(ev){
+  ev.preventDefault();
+  dropzone.classList.remove("drag");
+  handleFiles(ev.dataTransfer.files);
+});
+fileInput.addEventListener("change", function(){
+  handleFiles(fileInput.files);
+  fileInput.value = "";
+});
+
+function handleFiles(fileList){
+  Array.prototype.forEach.call(fileList, uploadOne);
+}
+
+function uploadOne(file){
+  var row = document.createElement("div");
+  row.className = "upload-row";
+  row.innerHTML = '<span class="name">' + escapeHtml(file.name) + '</span><div class="bar"><i></i></div><span class="pct">0%</span>';
+  uploadRows.appendChild(row);
+  var bar = row.querySelector("i");
+  var pct = row.querySelector(".pct");
+
+  upload(file.name, file, {
+    access: "public",
+    handleUploadUrl: "/api/social-upload-token",
+    clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
+    onUploadProgress: function(ev){
+      bar.style.width = ev.percentage + "%";
+      pct.textContent = ev.percentage + "%";
+    },
+  }).then(function(){
+    pct.textContent = "done";
+    setTimeout(function(){ row.remove(); }, 1200);
+    refreshMedia();
+    setTimeout(refreshMedia, 1500);
+    setTimeout(refreshMedia, 3500);
+  }).catch(function(err){
+    row.classList.add("error");
+    pct.textContent = "failed";
+    row.title = err.message;
+  });
+}
+
+/* Composer */
+document.getElementById("ig-caption-toggle").addEventListener("click", function(){
+  var el = document.getElementById("caption-ig");
+  el.hidden = !el.hidden;
+  this.textContent = el.hidden ? "+ Use a different caption for Instagram" : "− Use the same caption for both";
+});
+document.getElementById("when-now").addEventListener("change", function(){
+  document.getElementById("schedule-at").disabled = true;
+  updateSubmitLabel();
+});
+document.getElementById("when-later").addEventListener("change", function(){
+  document.getElementById("schedule-at").disabled = false;
+  updateSubmitLabel();
+});
+
+document.getElementById("btn-submit").addEventListener("click", function(){
+  var resultEl = document.getElementById("composer-result");
+  resultEl.className = "composer-status";
+  resultEl.textContent = "";
+
+  if (!state.selectedMediaId) return;
+  var targets = [];
+  if (document.getElementById("target-fb").checked) targets.push("facebook");
+  if (document.getElementById("target-ig").checked) targets.push("instagram");
+  if (!targets.length) { resultEl.className = "composer-status error"; resultEl.textContent = "Pick at least one platform."; return; }
+
+  var later = document.getElementById("when-later").checked;
+  var scheduledFor = null;
+  if (later) {
+    var val = document.getElementById("schedule-at").value;
+    if (!val) { resultEl.className = "composer-status error"; resultEl.textContent = "Pick a date and time."; return; }
+    scheduledFor = new Date(val).getTime();
+    if (!(scheduledFor > Date.now())) { resultEl.className = "composer-status error"; resultEl.textContent = "Scheduled time has to be in the future."; return; }
+  }
+
+  var captionIgEl = document.getElementById("caption-ig");
+  var payload = {
+    mediaId: state.selectedMediaId,
+    caption: document.getElementById("caption").value,
+    captionInstagram: captionIgEl.hidden ? null : captionIgEl.value,
+    targets: targets,
+    scheduledFor: scheduledFor,
+  };
+
+  var btn = document.getElementById("btn-submit");
+  btn.disabled = true;
+  resultEl.textContent = later ? "Scheduling..." : "Posting...";
+
+  createPost(payload).then(function(body){
+    var post = body.post;
+    if (post.status === "scheduled") {
+      resultEl.className = "composer-status ok";
+      resultEl.textContent = "Scheduled for " + new Date(post.scheduledFor).toLocaleString() + ".";
+    } else if (post.status === "posted") {
+      resultEl.className = "composer-status ok";
+      resultEl.textContent = "Posted!";
+    } else if (post.status === "partial") {
+      resultEl.className = "composer-status error";
+      resultEl.textContent = "Posted to some platforms, not others — check the table below.";
+    } else {
+      resultEl.className = "composer-status error";
+      resultEl.textContent = "Posting failed — check the table below for details.";
+    }
+    document.getElementById("caption").value = "";
+    captionIgEl.value = "";
+    captionIgEl.hidden = true;
+    document.getElementById("ig-caption-toggle").textContent = "+ Use a different caption for Instagram";
+    document.getElementById("when-now").checked = true;
+    document.getElementById("schedule-at").disabled = true;
+    document.getElementById("schedule-at").value = "";
+    updateSubmitLabel();
+    selectMedia(null);
+    refreshPosts();
+  }).catch(function(err){
+    resultEl.className = "composer-status error";
+    resultEl.textContent = err.message;
+  }).finally(function(){
+    btn.disabled = false;
+  });
+});
+
+/* Gate */
+var gateForm = document.getElementById("gate-form");
+var gateInput = document.getElementById("gate-input");
+var gateError = document.getElementById("gate-error");
+var gateEl = document.getElementById("gate");
+var appRoot = document.getElementById("app-root");
+
+function showGate(message){
+  gateError.textContent = message || "";
+  gateEl.hidden = false;
+  appRoot.hidden = true;
+}
+function showApp(){
+  gateEl.hidden = true;
+  appRoot.hidden = false;
+}
+
+function tryLoad(key){
+  passKey = key;
+  return fetchMedia().then(function(media){
+    try { localStorage.setItem("social_key", key); } catch(e){}
+    state.media = media;
+    showApp();
+    renderMedia();
+    updateSubmitLabel();
+    return refreshPosts();
+  }).catch(function(err){
+    if (err.code === 401){
+      try { localStorage.removeItem("social_key"); } catch(e){}
+      showGate("Incorrect passphrase.");
+    } else {
+      showGate("Couldn't connect: " + err.message);
+    }
+  });
+}
+
+gateForm.addEventListener("submit", function(ev){
+  ev.preventDefault();
+  tryLoad(gateInput.value);
+});
+document.getElementById("btn-lock").addEventListener("click", function(){
+  try { localStorage.removeItem("social_key"); } catch(e){}
+  location.reload();
+});
+
+(function init(){
+  var saved = null;
+  try { saved = localStorage.getItem("social_key"); } catch(e){}
+  if (saved) tryLoad(saved);
+  else showGate("");
+})();
+</script>
+</body>
+</html>

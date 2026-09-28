@@ -1,5 +1,9 @@
 {
   "redirects": [
-    { "source": "/", "destination": "/ui_kits/website/index.html" }
+    { "source": "/", "destination": "/ui_kits/website/index.html" },
+    { "source": "/social", "destination": "/social/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/social-cron", "schedule": "0 16 * * *" }
   ]
 }

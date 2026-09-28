@@ -2,6 +2,13 @@
 // Vercel Blob (via api/social-upload-token.js), ready to attach to a post.
 //
 // GET    -> list all media, newest first
+// POST   -> register a just-uploaded file (called by the browser right
+//           after a direct-to-Blob upload succeeds — see social/index.html.
+//           Originally this was done server-side via Blob's
+//           onUploadCompleted webhook, but that server-to-server callback
+//           was silently never arriving in production on this project, so
+//           registration was moved to the client, which already has all
+//           the metadata it needs the moment upload() resolves.)
 // DELETE ?id=<mediaId> -> remove the Blob file and its library entry
 
 const { del } = require("@vercel/blob");
@@ -23,6 +30,29 @@ async function redis(command) {
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data.result;
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    if (req.body !== undefined && req.body !== null) {
+      if (typeof req.body === "string") {
+        try { resolve(JSON.parse(req.body || "{}")); } catch (e) { resolve({}); }
+      } else {
+        resolve(req.body);
+      }
+      return;
+    }
+    let data = "";
+    req.on("data", (chunk) => { data += chunk; });
+    req.on("end", () => {
+      try { resolve(JSON.parse(data || "{}")); } catch (e) { resolve({}); }
+    });
+    req.on("error", () => resolve({}));
+  });
+}
+
+function freshId() {
+  return "m_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
 }
 
 module.exports = async (req, res) => {
@@ -47,6 +77,28 @@ module.exports = async (req, res) => {
       }
       items.sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
       res.status(200).json({ media: items });
+      return;
+    }
+
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const url = String(body.url || "").trim();
+      const contentType = String(body.contentType || "").trim();
+      if (!url || !contentType) { res.status(400).json({ error: "Missing url or contentType" }); return; }
+
+      const id = freshId();
+      const record = {
+        id,
+        url,
+        pathname: body.pathname || null,
+        contentType,
+        kind: contentType.startsWith("video/") ? "video" : "image",
+        filename: body.filename || url.split("/").pop(),
+        size: body.size || null,
+        uploadedAt: Date.now(),
+      };
+      await redis(["HSET", MEDIA_KEY, id, JSON.stringify(record)]);
+      res.status(200).json({ media: record });
       return;
     }
 

@@ -223,6 +223,13 @@ function fetchMedia(){
 function deleteMedia(id){
   return fetch("/api/social-media?id=" + encodeURIComponent(id), { method: "DELETE", headers: apiHeaders() }).then(handleAuthAware);
 }
+function registerMedia(blob){
+  return fetch("/api/social-media", {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify({ url: blob.url, pathname: blob.pathname, contentType: blob.contentType, filename: blob.filename || blob.pathname }),
+  }).then(handleAuthAware);
+}
 function fetchPosts(){
   return fetch("/api/social-posts", { headers: apiHeaders() }).then(handleAuthAware).then(function(b){ return b.posts || []; });
 }
@@ -390,12 +397,13 @@ function uploadOne(file){
       bar.style.width = ev.percentage + "%";
       pct.textContent = ev.percentage + "%";
     },
+  }).then(function(blob){
+    blob.filename = file.name;
+    return registerMedia(blob);
   }).then(function(){
     pct.textContent = "done";
     setTimeout(function(){ row.remove(); }, 1200);
     refreshMedia();
-    setTimeout(refreshMedia, 1500);
-    setTimeout(refreshMedia, 3500);
   }).catch(function(err){
     row.classList.add("error");
     pct.textContent = "failed";

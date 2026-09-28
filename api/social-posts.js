@@ -132,15 +132,13 @@ module.exports = async (req, res) => {
       const raw = await redis(["HGET", POSTS_KEY, id]);
       if (!raw) { res.status(404).json({ error: "Not found" }); return; }
       const post = JSON.parse(raw);
-      if (post.status !== "scheduled") {
-        res.status(400).json({ error: "Only a still-scheduled post can be canceled" });
-        return;
+      // A still-scheduled post must come off the queue first so the cron
+      // can't publish it after its history entry is gone.
+      if (post.status === "scheduled") {
+        await redis(["ZREM", QUEUE_KEY, id]);
       }
-      await redis(["ZREM", QUEUE_KEY, id]);
-      post.status = "canceled";
-      post.updatedAt = Date.now();
-      await redis(["HSET", POSTS_KEY, id, JSON.stringify(post)]);
-      res.status(200).json({ post });
+      await redis(["HDEL", POSTS_KEY, id]);
+      res.status(200).json({ ok: true });
       return;
     }
 

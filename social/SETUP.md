@@ -8,12 +8,14 @@ Upload a photo/video, write a caption, post to Facebook + Instagram immediately 
 |---|---|
 | `social/index.html` | The admin page (passphrase-gated, like `/spot-check`) |
 | `api/social-upload-token.js` | Lets the browser upload files straight to Vercel Blob storage (skips this project's ~4.5MB function body limit, which matters for video) |
-| `api/social-media.js` | Lists/deletes uploaded media |
+| `api/social-media.js` | Lists/registers/deletes uploaded media — the browser registers a file right after uploading it (see note below) |
 | `api/social-posts.js` | Creates a post — publishes immediately, or queues it if scheduled |
 | `api/social-cron.js` | Publishes due scheduled posts; needs to be pinged periodically (see below) |
 | `lib/metaGraph.js` | The actual Facebook/Instagram Graph API calls |
 
 Both platforms publish from a public URL (Vercel Blob), not a raw upload — that's just how Meta's API works.
+
+**Note on the upload flow:** `@vercel/blob`'s usual pattern has Vercel call your server back (`onUploadCompleted`) once a client upload finishes, so the server can register the file. On this project that server-to-server callback never actually arrived in production — confirmed via Vercel's logs, which only ever showed the initial token-generation request, never a follow-up call, even after hardcoding `callbackUrl` to the exact production domain. Rather than keep chasing that, `social/index.html` registers the upload itself via an authenticated `POST /api/social-media` the moment `upload()` resolves in the browser. If this ever gets revisited (e.g. to make uploads work from something other than this one page), that's the thing to know going in.
 
 ## 1. Create a Vercel Blob store
 

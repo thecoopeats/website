@@ -764,6 +764,13 @@ function uploadOne(file){
     access: "public",
     handleUploadUrl: "/api/social-upload-token",
     clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
+    // Forced off: multipart/chunked upload relies on streaming-request-body
+    // support that iOS WebKit (Safari, and anything else on iOS since
+    // they're all required to use WebKit) has historically handled poorly,
+    // which is the leading suspect for uploads failing/hanging on iPhone.
+    // A single plain PUT is slower for very large files but far more
+    // broadly compatible.
+    multipart: false,
     onUploadProgress: function(ev){
       gotAnyProgress = true;
       bar.style.width = ev.percentage + "%";
@@ -787,6 +794,7 @@ function uploadOne(file){
     var detail = (err && err.message === "timeout")
       ? (gotAnyProgress ? "Timed out mid-transfer — check your connection and try again." : "Timed out before the upload even started transferring (never got a permission/progress response) — check your connection and try again.")
       : (err && err.message ? err.message : String(err));
+    if (err && err.cause) detail += " (" + (err.cause.message || err.cause) + ")";
     msgEl.textContent = detail;
     row.appendChild(msgEl);
   });

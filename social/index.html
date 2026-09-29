@@ -746,6 +746,40 @@ function withTimeout(promise, ms, message){
   });
 }
 
+var MAX_SERVER_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+// Plain XHR POST straight to our own server, which stores it in Blob
+// itself — used for photos small enough to fit under Vercel's function
+// body limit. Added because @vercel/blob/client's direct-to-Blob upload()
+// was unreliable on iOS (hung mid-transfer, then failed instantly with
+// "Load failed" after a version/config change) — a same-origin POST with
+// XHR has none of that cross-domain streaming-upload complexity, and XHR's
+// upload.onprogress is reliable cross-browser in a way fetch-based
+// progress tracking still isn't everywhere.
+function uploadViaServer(file, onProgress){
+  return new Promise(function(resolve, reject){
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/social-upload-direct?filename=" + encodeURIComponent(file.name));
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("x-social-key", passKey);
+    xhr.upload.onprogress = function(ev){
+      if (ev.lengthComputable) onProgress(Math.round((ev.loaded / ev.total) * 100));
+    };
+    xhr.onload = function(){
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch (e) { reject(new Error("Bad response from server")); }
+        return;
+      }
+      var msg = "Upload failed (HTTP " + xhr.status + ")";
+      try { var body = JSON.parse(xhr.responseText); if (body.error) msg = body.error; } catch (e) { /* keep default msg */ }
+      reject(new Error(msg));
+    };
+    xhr.onerror = function(){ reject(new Error("Network error during upload")); };
+    xhr.send(file);
+  });
+}
+
 function uploadOne(file){
   var row = document.createElement("div");
   row.className = "upload-row";
@@ -755,28 +789,29 @@ function uploadOne(file){
   var pct = row.querySelector(".pct");
   var gotAnyProgress = false;
 
+  function onProgress(percentage){
+    gotAnyProgress = true;
+    bar.style.width = percentage + "%";
+    pct.textContent = percentage + "%";
+  }
+
+  var useServerPath = file.type.indexOf("image/") === 0 && file.size <= MAX_SERVER_UPLOAD_BYTES;
+  var rawUploadPromise = useServerPath
+    ? uploadViaServer(file, onProgress)
+    : upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/social-upload-token",
+        clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
+        multipart: false,
+        onUploadProgress: function(ev){ onProgress(ev.percentage); },
+      });
+
   // Large videos over a slow mobile connection can legitimately take a
   // while, but this still has to resolve one way or the other eventually
   // rather than leave the row stuck with no explanation. The distinct
   // starting text (vs. a bare "0%") plus gotAnyProgress let a stuck upload
   // be told apart from one that's genuinely transferring at 0%.
-  var uploadPromise = upload(file.name, file, {
-    access: "public",
-    handleUploadUrl: "/api/social-upload-token",
-    clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
-    // Forced off: multipart/chunked upload relies on streaming-request-body
-    // support that iOS WebKit (Safari, and anything else on iOS since
-    // they're all required to use WebKit) has historically handled poorly,
-    // which is the leading suspect for uploads failing/hanging on iPhone.
-    // A single plain PUT is slower for very large files but far more
-    // broadly compatible.
-    multipart: false,
-    onUploadProgress: function(ev){
-      gotAnyProgress = true;
-      bar.style.width = ev.percentage + "%";
-      pct.textContent = ev.percentage + "%";
-    },
-  }).then(function(blob){
+  var uploadPromise = rawUploadPromise.then(function(blob){
     pct.textContent = "saving...";
     blob.filename = file.name;
     return registerMedia(blob);

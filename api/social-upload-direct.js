@@ -1,18 +1,17 @@
-// Alternative to api/social-upload-token.js's direct-to-Blob client upload,
-// used for photos small enough to fit this function's ~4.5MB body limit
-// (see social/index.html's uploadOne — it picks this path for images under
-// ~4MB, and falls back to the direct-to-Blob client flow otherwise, mainly
-// for video). Added because @vercel/blob/client's browser upload() was
-// unreliable on iOS (Safari/Chrome/Brave, all WebKit-based there) —
-// hanging mid-transfer, then failing immediately with "Load failed" after
-// version/config changes — while a plain POST through our own server has
-// none of that cross-domain, streaming-upload complexity.
+// Stores a small file (photos, under this function's ~4.5MB body limit) —
+// see social/index.html's uploadOne, which picks this path for files under
+// MAX_SERVER_UPLOAD_BYTES and the chunked pair (api/social-upload-chunk.js
+// + api/social-upload-complete.js) for anything larger. All uploads go
+// through this same-origin server route rather than @vercel/blob/client's
+// direct-to-Blob upload(), which was unreliable on iOS regardless of
+// version, multipart setting, or timeout length.
 //
 // POST body: the raw image bytes (Content-Type set to the image's MIME type)
 // Query param: ?filename=<original filename>
 //
-// Required Vercel project env vars (beyond api/social-upload-token.js's):
-//   (none new — reuses SOCIAL_PASSPHRASE and BLOB_READ_WRITE_TOKEN)
+// Required Vercel project env vars:
+//   SOCIAL_PASSPHRASE
+//   BLOB_READ_WRITE_TOKEN   (added automatically when you create a Blob store)
 
 const { put } = require("@vercel/blob");
 
@@ -44,7 +43,7 @@ module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
   if (!PASSPHRASE || !process.env.BLOB_READ_WRITE_TOKEN) {
-    res.status(500).json({ error: "Server not configured (passphrase/Blob). See api/social-upload-token.js setup." });
+    res.status(500).json({ error: "Server not configured (passphrase/Blob). Set SOCIAL_PASSPHRASE and BLOB_READ_WRITE_TOKEN in the project's environment variables, then redeploy." });
     return;
   }
   const key = req.headers["x-social-key"];

@@ -245,12 +245,13 @@
 </div>
 
 <script type="module">
-// Pinned to match package.json's @vercel/blob exactly -- an unpinned import
-// here previously resolved to esm.sh's "latest" independent of the server's
-// version, and the two ended up on incompatible major versions (server on
-// an old 0.x, browser on modern 2.x), which is the most likely reason
-// uploads were hanging mid-transfer instead of completing.
-import { upload } from "https://esm.sh/@vercel/blob@2.8.0/client";
+// Uploads go through this site's own server (api/social-upload-direct.js
+// for small files, api/social-upload-chunk.js + api/social-upload-complete.js
+// for larger ones — see uploadOne below), not @vercel/blob/client's
+// direct-to-Blob upload(). That path was unreliable on iOS regardless of
+// version pinning, multipart setting, or timeout length — it either hung
+// mid-transfer or failed instantly with "Load failed" for files of any
+// size. A same-origin POST has none of that cross-domain complexity.
 
 var passKey = null;
 var state = { media: [], posts: [], selectedMediaId: null };
@@ -780,10 +781,65 @@ function uploadViaServer(file, onProgress){
   });
 }
 
+var CHUNK_SIZE = 4 * 1024 * 1024;
+
+function uploadChunkXhr(uploadId, index, chunkBlob){
+  return new Promise(function(resolve, reject){
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/social-upload-chunk?uploadId=" + uploadId + "&index=" + index);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("x-social-key", passKey);
+    xhr.onload = function(){
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).url); }
+        catch (e) { reject(new Error("Bad chunk response")); }
+        return;
+      }
+      var msg = "Chunk " + index + " failed (HTTP " + xhr.status + ")";
+      try { var body = JSON.parse(xhr.responseText); if (body.error) msg = body.error; } catch (e) { /* keep default msg */ }
+      reject(new Error(msg));
+    };
+    xhr.onerror = function(){ reject(new Error("Network error uploading chunk " + index)); };
+    xhr.send(chunkBlob);
+  });
+}
+
+// Splits a large file into CHUNK_SIZE pieces, uploads them one at a time
+// via the same-origin path proven reliable by uploadViaServer, then asks
+// the server to reassemble them (api/social-upload-complete.js). Used for
+// anything too big to fit in a single request under
+// MAX_SERVER_UPLOAD_BYTES — mainly video.
+function uploadViaChunks(file, onProgress){
+  var uploadId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  var totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  var chunkUrls = [];
+  var uploadedBytes = 0;
+
+  function next(index){
+    if (index >= totalChunks) return Promise.resolve();
+    var start = index * CHUNK_SIZE;
+    var end = Math.min(start + CHUNK_SIZE, file.size);
+    return uploadChunkXhr(uploadId, index, file.slice(start, end)).then(function(url){
+      chunkUrls.push(url);
+      uploadedBytes += (end - start);
+      onProgress(Math.round((uploadedBytes / file.size) * 100));
+      return next(index + 1);
+    });
+  }
+
+  return next(0).then(function(){
+    return fetch("/api/social-upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-social-key": passKey },
+      body: JSON.stringify({ chunkUrls: chunkUrls, filename: file.name, contentType: file.type || "application/octet-stream" }),
+    }).then(handleAuthAware);
+  });
+}
+
 function uploadOne(file){
   var row = document.createElement("div");
   row.className = "upload-row";
-  row.innerHTML = '<span class="name">' + escapeHtml(file.name) + '</span><div class="bar"><i></i></div><span class="pct">requesting permission…</span>';
+  row.innerHTML = '<span class="name">' + escapeHtml(file.name) + '</span><div class="bar"><i></i></div><span class="pct">starting…</span>';
   uploadRows.appendChild(row);
   var bar = row.querySelector("i");
   var pct = row.querySelector(".pct");
@@ -795,16 +851,9 @@ function uploadOne(file){
     pct.textContent = percentage + "%";
   }
 
-  var useServerPath = file.type.indexOf("image/") === 0 && file.size <= MAX_SERVER_UPLOAD_BYTES;
-  var rawUploadPromise = useServerPath
+  var rawUploadPromise = file.size <= MAX_SERVER_UPLOAD_BYTES
     ? uploadViaServer(file, onProgress)
-    : upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/social-upload-token",
-        clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
-        multipart: false,
-        onUploadProgress: function(ev){ onProgress(ev.percentage); },
-      });
+    : uploadViaChunks(file, onProgress);
 
   // Large videos over a slow mobile connection can legitimately take a
   // while, but this still has to resolve one way or the other eventually
@@ -832,7 +881,7 @@ function uploadOne(file){
     var msgEl = document.createElement("div");
     msgEl.style.cssText = "flex-basis:100%;color:var(--coop-red);font-size:11px;";
     var detail = (err && err.message === "timeout")
-      ? (gotAnyProgress ? "Timed out mid-transfer — check your connection and try again." : "Timed out before the upload even started transferring (never got a permission/progress response) — check your connection and try again.")
+      ? (gotAnyProgress ? "Timed out mid-transfer — check your connection and try again." : "Timed out before the upload even started transferring — check your connection and try again.")
       : (err && err.message ? err.message : String(err));
     if (err && err.cause) detail += " (" + (err.cause.message || err.cause) + ")";
     msgEl.textContent = detail;

@@ -58,7 +58,7 @@ module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
   if (!REDIS_URL || !REDIS_TOKEN || !PASSPHRASE) {
-    res.status(500).json({ error: "Server not configured (storage/passphrase). See api/social-upload-token.js setup." });
+    res.status(500).json({ error: "Server not configured (storage/passphrase). See api/social-upload-direct.js setup." });
     return;
   }
   const key = req.headers["x-social-key"];

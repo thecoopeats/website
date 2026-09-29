@@ -1,9 +1,11 @@
 // The social-poster's media library: photos/videos already uploaded to
-// Vercel Blob (via api/social-upload-token.js), ready to attach to a post.
+// Vercel Blob (via api/social-upload-direct.js or the chunked pair,
+// api/social-upload-chunk.js + api/social-upload-complete.js), ready to
+// attach to a post.
 //
 // GET    -> list all media, newest first
 // POST   -> register a just-uploaded file (called by the browser right
-//           after a direct-to-Blob upload succeeds — see social/index.html.
+//           after an upload succeeds — see social/index.html.
 //           Originally this was done server-side via Blob's
 //           onUploadCompleted webhook, but that server-to-server callback
 //           was silently never arriving in production on this project, so
@@ -59,7 +61,7 @@ module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
   if (!REDIS_URL || !REDIS_TOKEN || !PASSPHRASE) {
-    res.status(500).json({ error: "Server not configured (storage/passphrase). See api/social-upload-token.js setup." });
+    res.status(500).json({ error: "Server not configured (storage/passphrase). See api/social-upload-direct.js setup." });
     return;
   }
   const key = req.headers["x-social-key"];

@@ -484,12 +484,35 @@ function closestIgRatio(ratio){
 function matchesAnyIgRatio(ratio){
   return IG_RATIOS.some(function(r){ return Math.abs(ratio - r.ratio) / r.ratio < RATIO_TOLERANCE; });
 }
+// Browsers can silently never fire either onload or onerror for formats
+// they can't decode (notably HEIC/HEIF from iPhones) — without a timeout,
+// that leaves resolveFileForUpload's promise hanging forever and the
+// upload never starts. isHeic() below catches the common case ahead of
+// time, but this timeout is the last-resort safety net for anything else.
 function getImageDimensions(file){
   return new Promise(function(resolve, reject){
     var url = URL.createObjectURL(file);
     var img = new Image();
-    img.onload = function(){ resolve({ width: img.naturalWidth, height: img.naturalHeight, url: url }); };
-    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("Couldn't read image")); };
+    var settled = false;
+    var timer = setTimeout(function(){
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      reject(new Error("Timed out reading image"));
+    }, 8000);
+    img.onload = function(){
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight, url: url });
+    };
+    img.onerror = function(){
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      reject(new Error("Couldn't read image"));
+    };
     img.src = url;
   });
 }
@@ -545,8 +568,27 @@ function getVideoDuration(file){
     var url = URL.createObjectURL(file);
     var video = document.createElement("video");
     video.preload = "metadata";
-    video.onloadedmetadata = function(){ URL.revokeObjectURL(url); resolve(video.duration); };
-    video.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("Couldn't read video")); };
+    var settled = false;
+    var timer = setTimeout(function(){
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      reject(new Error("Timed out reading video"));
+    }, 8000);
+    video.onloadedmetadata = function(){
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = function(){
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      reject(new Error("Couldn't read video"));
+    };
     video.src = url;
   });
 }
@@ -570,9 +612,27 @@ function checkVideoConstraints(file){
   });
 }
 
+// iPhones often capture photos as HEIC/HEIF, which browsers generally
+// can't decode via <img>/canvas — without catching this upfront, the
+// ratio-check below would just hang (or time out after 8s) instead of
+// failing fast with guidance the person can actually act on.
+function isHeicFile(file){
+  var type = (file.type || "").toLowerCase();
+  var name = (file.name || "").toLowerCase();
+  return type === "image/heic" || type === "image/heif" || /\.(heic|heif)$/.test(name);
+}
+
 function resolveFileForUpload(file){
   if (file.type.indexOf("video/") === 0) return checkVideoConstraints(file);
   if (file.type.indexOf("image/") !== 0) return Promise.resolve(file);
+
+  if (isHeicFile(file)) {
+    var proceed = confirm(
+      "This looks like a HEIC/HEIF photo (common on iPhone) — browsers can't process this format, so it can't be ratio-checked, cropped, or converted here, and Instagram's API requires JPEG, so it will likely fail to post there (Facebook may still accept it).\n\n" +
+      "For reliable posting, set your iPhone to Settings > Camera > Formats > \"Most Compatible\" so new photos save as JPEG, or share/export this one as JPEG first.\n\nUpload anyway?"
+    );
+    return Promise.resolve(proceed ? file : null);
+  }
 
   return getImageDimensions(file).then(function(dim){
     var ratio = dim.width / dim.height;

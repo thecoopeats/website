@@ -245,7 +245,12 @@
 </div>
 
 <script type="module">
-import { upload } from "https://esm.sh/@vercel/blob/client";
+// Pinned to match package.json's @vercel/blob exactly -- an unpinned import
+// here previously resolved to esm.sh's "latest" independent of the server's
+// version, and the two ended up on incompatible major versions (server on
+// an old 0.x, browser on modern 2.x), which is the most likely reason
+// uploads were hanging mid-transfer instead of completing.
+import { upload } from "https://esm.sh/@vercel/blob@2.8.0/client";
 
 var passKey = null;
 var state = { media: [], posts: [], selectedMediaId: null };

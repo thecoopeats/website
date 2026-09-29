@@ -417,13 +417,19 @@ async function handleFiles(fileList){
   }
 }
 
-/* Instagram ratio check + crop */
+/* Instagram content requirements: ratio + crop, JPEG-only, size caps.
+   Source: developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media */
 var IG_RATIOS = [
   { label: "Square (1:1)", ratio: 1 },
   { label: "Portrait (4:5)", ratio: 4 / 5 },
   { label: "Landscape (1.91:1)", ratio: 1.91 },
 ];
 var RATIO_TOLERANCE = 0.02;
+var IG_MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+var IG_MIN_PHOTO_WIDTH = 320;
+var IG_MAX_VIDEO_BYTES = 300 * 1024 * 1024;
+var IG_MIN_VIDEO_SECONDS = 3;
+var IG_MAX_VIDEO_SECONDS = 15 * 60;
 
 function closestIgRatio(ratio){
   var best = IG_RATIOS[0], bestDiff = Infinity;
@@ -445,14 +451,98 @@ function getImageDimensions(file){
     img.src = url;
   });
 }
+function loadImageElement(url){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    img.onload = function(){ resolve(img); };
+    img.onerror = function(){ reject(new Error("Couldn't load image")); };
+    img.src = url;
+  });
+}
+
+// Re-encodes a canvas as JPEG, stepping quality down and (if that's not
+// enough) scaling dimensions down, until it fits under maxBytes — Instagram
+// requires JPEG and caps photos at 8MB.
+function canvasToJpegUnderLimit(canvas, maxBytes){
+  var qualities = [0.92, 0.85, 0.75, 0.65, 0.5];
+  function tryQualities(i){
+    return new Promise(function(resolve){
+      canvas.toBlob(resolve, "image/jpeg", qualities[i]);
+    }).then(function(blob){
+      if ((blob && blob.size <= maxBytes) || i === qualities.length - 1) return blob;
+      return tryQualities(i + 1);
+    });
+  }
+  return tryQualities(0).then(function(blob){
+    if (!blob || blob.size <= maxBytes || canvas.width <= IG_MIN_PHOTO_WIDTH * 1.2) return blob;
+    var scaled = document.createElement("canvas");
+    scaled.width = Math.max(IG_MIN_PHOTO_WIDTH, Math.round(canvas.width * 0.75));
+    scaled.height = Math.round(scaled.width * (canvas.height / canvas.width));
+    scaled.getContext("2d").drawImage(canvas, 0, 0, scaled.width, scaled.height);
+    return canvasToJpegUnderLimit(scaled, maxBytes);
+  });
+}
+
+// Re-encodes a whole (uncropped) image as a size-capped JPEG, without
+// changing its framing — used both when an upload's ratio already matches
+// and needs no crop, and for "Upload as-is" out of the crop modal.
+function normalizeImageNoCrop(file, url, width, height){
+  return loadImageElement(url).then(function(img){
+    var canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+    return canvasToJpegUnderLimit(canvas, IG_MAX_PHOTO_BYTES);
+  }).then(function(blob){
+    return new File([blob], file.name, { type: "image/jpeg" });
+  });
+}
+
+function getVideoDuration(file){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file);
+    var video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = function(){ URL.revokeObjectURL(url); resolve(video.duration); };
+    video.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("Couldn't read video")); };
+    video.src = url;
+  });
+}
+
+function checkVideoConstraints(file){
+  var issues = [];
+  if (file.size > IG_MAX_VIDEO_BYTES) {
+    issues.push("its file size (" + (file.size / 1024 / 1024).toFixed(0) + "MB) is over Instagram's 300MB limit");
+  }
+  return getVideoDuration(file).catch(function(){ return null; }).then(function(duration){
+    if (duration != null && isFinite(duration)) {
+      if (duration < IG_MIN_VIDEO_SECONDS) issues.push("it's shorter (" + duration.toFixed(1) + "s) than Instagram's 3-second minimum");
+      if (duration > IG_MAX_VIDEO_SECONDS) issues.push("it's longer (" + Math.round(duration / 60) + " min) than Instagram's 15-minute maximum");
+    }
+    if (!issues.length) return file;
+    var proceed = confirm(
+      "This video may not post to Instagram: " + issues.join("; ") + ".\n\n" +
+      "Facebook is more lenient and will likely still accept it.\n\nUpload anyway?"
+    );
+    return proceed ? file : null;
+  });
+}
 
 function resolveFileForUpload(file){
+  if (file.type.indexOf("video/") === 0) return checkVideoConstraints(file);
   if (file.type.indexOf("image/") !== 0) return Promise.resolve(file);
+
   return getImageDimensions(file).then(function(dim){
     var ratio = dim.width / dim.height;
     if (matchesAnyIgRatio(ratio)) {
-      URL.revokeObjectURL(dim.url);
-      return file;
+      if (file.type === "image/jpeg" && file.size <= IG_MAX_PHOTO_BYTES) {
+        URL.revokeObjectURL(dim.url);
+        return file;
+      }
+      return normalizeImageNoCrop(file, dim.url, dim.width, dim.height).then(function(normalized){
+        URL.revokeObjectURL(dim.url);
+        return normalized;
+      });
     }
     return openCropModal(file, dim);
   }).catch(function(){ return file; });
@@ -470,6 +560,10 @@ function openCropModal(file, dim){
 
     cropHint.textContent = "This image is " + dim.width + "×" + dim.height + " (not a standard Instagram ratio). Pick a ratio and drag/scroll to reposition, or upload it as-is.";
     cropModal.hidden = false;
+    document.getElementById("crop-confirm").textContent = "Crop & upload";
+    document.getElementById("crop-confirm").disabled = false;
+    document.getElementById("crop-skip").textContent = "Upload as-is";
+    document.getElementById("crop-skip").disabled = false;
 
     var ratioButtons = cropModal.querySelectorAll(".crop-ratio-btn");
     function setActiveButton(targetRatio){
@@ -508,18 +602,28 @@ function openCropModal(file, dim){
       };
     });
 
-    document.getElementById("crop-confirm").onclick = function(){
+    var confirmBtn = document.getElementById("crop-confirm");
+    var skipBtn = document.getElementById("crop-skip");
+
+    confirmBtn.onclick = function(){
       if (!cropperInstance) { cleanup(); resolve(file); return; }
-      var outType = (file.type === "image/png" || file.type === "image/webp") ? file.type : "image/jpeg";
-      cropperInstance.getCroppedCanvas().toBlob(function(blob){
+      confirmBtn.textContent = "Processing...";
+      confirmBtn.disabled = true;
+      canvasToJpegUnderLimit(cropperInstance.getCroppedCanvas(), IG_MAX_PHOTO_BYTES).then(function(blob){
         cleanup();
-        if (!blob) { resolve(file); return; }
-        resolve(new File([blob], file.name, { type: outType }));
-      }, outType, 0.92);
+        resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file);
+      });
     };
-    document.getElementById("crop-skip").onclick = function(){
-      cleanup();
-      resolve(file);
+    skipBtn.onclick = function(){
+      skipBtn.textContent = "Processing...";
+      skipBtn.disabled = true;
+      normalizeImageNoCrop(file, dim.url, dim.width, dim.height).then(function(normalized){
+        cleanup();
+        resolve(normalized);
+      }).catch(function(){
+        cleanup();
+        resolve(file);
+      });
     };
     document.getElementById("crop-cancel").onclick = function(){
       cleanup();

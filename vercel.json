@@ -1,7 +1,13 @@
 {
   "redirects": [
+    { "source": "/social", "destination": "/social/index.html" },
+    { "source": "/ui_kits/website/index.html", "destination": "/", "permanent": true }
+  ],
+  "rewrites": [
     { "source": "/", "destination": "/ui_kits/website/index.html" },
-    { "source": "/social", "destination": "/social/index.html" }
+    { "source": "/menu", "destination": "/ui_kits/website/index.html" },
+    { "source": "/find-us", "destination": "/ui_kits/website/index.html" },
+    { "source": "/catering", "destination": "/ui_kits/website/index.html" }
   ],
   "crons": [
     { "path": "/api/social-cron", "schedule": "0 16 * * *" }

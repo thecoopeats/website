@@ -1,5 +1,5 @@
 const { NavBar, Button, Card, Badge, Logo, MenuSection, MenuItem, SauceChip, SAUCES, DashRule, Tabs, Input, Select, Checkbox, Radio, Switch, Stepper, Toast, Dialog, PriceTag, IconButton } = window.TheCoopDesignSystem_a9fb85;
-const AB = '../../';
+const AB = '/';
 const ORDER = 'https://order.tbdine.com/pickup/30439/menu';
 const MERCH = 'https://the-coop-8.creator-spring.com/';
 const EXT = <span style={{ fontSize: '.8em' }}>↗</span>;

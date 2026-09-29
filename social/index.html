@@ -817,7 +817,12 @@ function uploadOne(file){
     return registerMedia(blob);
   });
 
-  withTimeout(uploadPromise, 180000, "timeout").then(function(){
+  // Scales with file size (assuming a conservative 0.5MB/s floor) rather
+  // than a flat 3 minutes -- a large video can legitimately take well past
+  // that on a real mobile connection, and a flat cap made a genuinely
+  // still-working transfer indistinguishable from a truly stuck one.
+  var timeoutMs = Math.max(180000, (file.size / (0.5 * 1024 * 1024)) * 1000 + 60000);
+  withTimeout(uploadPromise, timeoutMs, "timeout").then(function(){
     pct.textContent = "done";
     setTimeout(function(){ row.remove(); }, 1200);
     refreshMedia();

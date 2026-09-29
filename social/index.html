@@ -744,28 +744,33 @@ function withTimeout(promise, ms, message){
 function uploadOne(file){
   var row = document.createElement("div");
   row.className = "upload-row";
-  row.innerHTML = '<span class="name">' + escapeHtml(file.name) + '</span><div class="bar"><i></i></div><span class="pct">0%</span>';
+  row.innerHTML = '<span class="name">' + escapeHtml(file.name) + '</span><div class="bar"><i></i></div><span class="pct">requesting permission…</span>';
   uploadRows.appendChild(row);
   var bar = row.querySelector("i");
   var pct = row.querySelector(".pct");
+  var gotAnyProgress = false;
 
   // Large videos over a slow mobile connection can legitimately take a
   // while, but this still has to resolve one way or the other eventually
-  // rather than leave the row stuck at 0% forever with no explanation.
+  // rather than leave the row stuck with no explanation. The distinct
+  // starting text (vs. a bare "0%") plus gotAnyProgress let a stuck upload
+  // be told apart from one that's genuinely transferring at 0%.
   var uploadPromise = upload(file.name, file, {
     access: "public",
     handleUploadUrl: "/api/social-upload-token",
     clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
     onUploadProgress: function(ev){
+      gotAnyProgress = true;
       bar.style.width = ev.percentage + "%";
       pct.textContent = ev.percentage + "%";
     },
   }).then(function(blob){
+    pct.textContent = "saving...";
     blob.filename = file.name;
     return registerMedia(blob);
   });
 
-  withTimeout(uploadPromise, 180000, "Timed out after 3 minutes — check your connection and try again.").then(function(){
+  withTimeout(uploadPromise, 180000, "timeout").then(function(){
     pct.textContent = "done";
     setTimeout(function(){ row.remove(); }, 1200);
     refreshMedia();
@@ -774,7 +779,10 @@ function uploadOne(file){
     pct.textContent = "failed";
     var msgEl = document.createElement("div");
     msgEl.style.cssText = "flex-basis:100%;color:var(--coop-red);font-size:11px;";
-    msgEl.textContent = err && err.message ? err.message : String(err);
+    var detail = (err && err.message === "timeout")
+      ? (gotAnyProgress ? "Timed out mid-transfer — check your connection and try again." : "Timed out before the upload even started transferring (never got a permission/progress response) — check your connection and try again.")
+      : (err && err.message ? err.message : String(err));
+    msgEl.textContent = detail;
     row.appendChild(msgEl);
   });
 }

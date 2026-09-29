@@ -6,6 +6,8 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Social Poster — The Coop</title>
 <link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 <style>
   :root{
     --status-scheduled-bg:#FDEAE0; --status-scheduled-fg:#8a4b12;
@@ -88,6 +90,18 @@
   .composer-status{font-size:var(--text-2xs);min-height:16px;}
   .composer-status.error{color:var(--coop-red);font-weight:700;}
   .composer-status.ok{color:#2c6b1f;font-weight:700;}
+
+  /* Crop modal */
+  #crop-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(10,10,10,.6);}
+  .crop-card{background:var(--surface-card);border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-lg);box-shadow:var(--shadow-sticker-lg);max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:20px;}
+  .crop-card h2{font-family:var(--font-poster);font-weight:400;font-size:var(--text-md);margin-bottom:6px;}
+  .crop-hint{font-size:var(--text-xs);color:var(--text-muted);margin-bottom:14px;}
+  .crop-stage{width:100%;height:340px;background:#000;border-radius:var(--radius-sm);overflow:hidden;}
+  .crop-stage img{max-width:100%;display:block;}
+  .crop-ratio-row{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;}
+  .crop-ratio-btn{appearance:none;border:var(--stroke-2) solid var(--border-hard);border-radius:var(--radius-sm);padding:7px 12px;font-size:var(--text-2xs);font-weight:700;background:var(--surface-card);cursor:pointer;}
+  .crop-ratio-btn.active{background:var(--surface-accent);color:var(--text-on-red);}
+  .crop-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 
   table.posts{width:100%;border-collapse:collapse;font-size:var(--text-xs);}
   table.posts th{text-align:left;font-family:var(--font-mono);font-size:var(--text-3xs);text-transform:uppercase;letter-spacing:var(--tracking-caps);color:var(--text-muted);padding:6px 8px;border-bottom:var(--stroke-1) solid var(--border-hard);}
@@ -197,6 +211,24 @@
       <div class="media-empty" id="posts-empty" hidden>No posts yet.</div>
     </div>
   </main>
+</div>
+
+<div id="crop-modal" hidden>
+  <div class="crop-card">
+    <h2>Crop for Instagram</h2>
+    <p class="crop-hint" id="crop-hint"></p>
+    <div class="crop-stage"><img id="crop-image" alt=""></div>
+    <div class="crop-ratio-row">
+      <button type="button" class="crop-ratio-btn" data-ratio="1">Square (1:1)</button>
+      <button type="button" class="crop-ratio-btn" data-ratio="0.8">Portrait (4:5)</button>
+      <button type="button" class="crop-ratio-btn" data-ratio="1.91">Landscape (1.91:1)</button>
+    </div>
+    <div class="crop-actions">
+      <button type="button" class="btn btn-ghost btn-sm" id="crop-cancel" style="color:var(--text-body);border-color:var(--border-hard);">Cancel</button>
+      <button type="button" class="btn btn-quiet" id="crop-skip">Upload as-is</button>
+      <button type="button" class="btn btn-primary" id="crop-confirm">Crop &amp; upload</button>
+    </div>
+  </div>
 </div>
 
 <script type="module">
@@ -377,8 +409,123 @@ fileInput.addEventListener("change", function(){
   fileInput.value = "";
 });
 
-function handleFiles(fileList){
-  Array.prototype.forEach.call(fileList, uploadOne);
+async function handleFiles(fileList){
+  var files = Array.prototype.slice.call(fileList);
+  for (var i = 0; i < files.length; i++) {
+    var resolved = await resolveFileForUpload(files[i]);
+    if (resolved) uploadOne(resolved);
+  }
+}
+
+/* Instagram ratio check + crop */
+var IG_RATIOS = [
+  { label: "Square (1:1)", ratio: 1 },
+  { label: "Portrait (4:5)", ratio: 4 / 5 },
+  { label: "Landscape (1.91:1)", ratio: 1.91 },
+];
+var RATIO_TOLERANCE = 0.02;
+
+function closestIgRatio(ratio){
+  var best = IG_RATIOS[0], bestDiff = Infinity;
+  IG_RATIOS.forEach(function(r){
+    var diff = Math.abs(ratio - r.ratio);
+    if (diff < bestDiff) { bestDiff = diff; best = r; }
+  });
+  return best;
+}
+function matchesAnyIgRatio(ratio){
+  return IG_RATIOS.some(function(r){ return Math.abs(ratio - r.ratio) / r.ratio < RATIO_TOLERANCE; });
+}
+function getImageDimensions(file){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){ resolve({ width: img.naturalWidth, height: img.naturalHeight, url: url }); };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("Couldn't read image")); };
+    img.src = url;
+  });
+}
+
+function resolveFileForUpload(file){
+  if (file.type.indexOf("image/") !== 0) return Promise.resolve(file);
+  return getImageDimensions(file).then(function(dim){
+    var ratio = dim.width / dim.height;
+    if (matchesAnyIgRatio(ratio)) {
+      URL.revokeObjectURL(dim.url);
+      return file;
+    }
+    return openCropModal(file, dim);
+  }).catch(function(){ return file; });
+}
+
+var cropModal = document.getElementById("crop-modal");
+var cropImage = document.getElementById("crop-image");
+var cropHint = document.getElementById("crop-hint");
+var cropperInstance = null;
+
+function openCropModal(file, dim){
+  return new Promise(function(resolve){
+    var ratio = dim.width / dim.height;
+    var defaultPreset = closestIgRatio(ratio);
+
+    cropHint.textContent = "This image is " + dim.width + "×" + dim.height + " (not a standard Instagram ratio). Pick a ratio and drag/scroll to reposition, or upload it as-is.";
+    cropModal.hidden = false;
+
+    var ratioButtons = cropModal.querySelectorAll(".crop-ratio-btn");
+    function setActiveButton(targetRatio){
+      ratioButtons.forEach(function(b){ b.classList.toggle("active", parseFloat(b.getAttribute("data-ratio")) === targetRatio); });
+    }
+
+    function cleanup(){
+      ratioButtons.forEach(function(b){ b.onclick = null; });
+      document.getElementById("crop-confirm").onclick = null;
+      document.getElementById("crop-skip").onclick = null;
+      document.getElementById("crop-cancel").onclick = null;
+      if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
+      URL.revokeObjectURL(dim.url);
+      cropModal.hidden = true;
+    }
+
+    cropImage.onload = function(){
+      cropperInstance = new Cropper(cropImage, {
+        aspectRatio: defaultPreset.ratio,
+        viewMode: 1,
+        dragMode: "move",
+        cropBoxMovable: false,
+        cropBoxResizable: false,
+        autoCropArea: 1,
+        responsive: true,
+      });
+    };
+    cropImage.src = dim.url;
+    setActiveButton(defaultPreset.ratio);
+
+    ratioButtons.forEach(function(btn){
+      btn.onclick = function(){
+        var r = parseFloat(btn.getAttribute("data-ratio"));
+        setActiveButton(r);
+        if (cropperInstance) cropperInstance.setAspectRatio(r);
+      };
+    });
+
+    document.getElementById("crop-confirm").onclick = function(){
+      if (!cropperInstance) { cleanup(); resolve(file); return; }
+      var outType = (file.type === "image/png" || file.type === "image/webp") ? file.type : "image/jpeg";
+      cropperInstance.getCroppedCanvas().toBlob(function(blob){
+        cleanup();
+        if (!blob) { resolve(file); return; }
+        resolve(new File([blob], file.name, { type: outType }));
+      }, outType, 0.92);
+    };
+    document.getElementById("crop-skip").onclick = function(){
+      cleanup();
+      resolve(file);
+    };
+    document.getElementById("crop-cancel").onclick = function(){
+      cleanup();
+      resolve(null);
+    };
+  });
 }
 
 function uploadOne(file){

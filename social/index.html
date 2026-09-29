@@ -74,7 +74,16 @@
   .media-tile.selected{outline:3px solid var(--coop-red);outline-offset:2px;}
   .media-tile .kind-badge{position:absolute;top:4px;left:4px;background:rgba(10,10,10,.7);color:#fff;font-family:var(--font-mono);font-size:9px;padding:2px 5px;border-radius:4px;text-transform:uppercase;}
   .media-tile .del-btn{position:absolute;top:4px;right:4px;background:rgba(10,10,10,.7);color:#fff;border:none;border-radius:4px;width:20px;height:20px;line-height:1;cursor:pointer;font-size:13px;}
+  .media-tile .preview-btn{position:absolute;bottom:4px;right:4px;background:rgba(10,10,10,.7);color:#fff;border:none;border-radius:4px;width:22px;height:22px;line-height:1;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
   .media-empty{color:var(--text-muted);font-size:var(--text-xs);padding:12px 0;}
+  .composer-preview{position:relative;}
+  .composer-preview .preview-btn{position:absolute;bottom:6px;right:6px;background:rgba(10,10,10,.7);color:#fff;border:none;border-radius:4px;width:24px;height:24px;line-height:1;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;}
+
+  /* Preview lightbox */
+  #preview-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(10,10,10,.75);}
+  .preview-card{max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .preview-card img, .preview-card video{max-width:90vw;max-height:80vh;border-radius:var(--radius-sm);border:var(--stroke-2) solid #fff;display:block;}
+  .preview-card .btn{align-self:center;}
 
   .composer{display:none;gap:16px;}
   .composer.open{display:flex;flex-wrap:wrap;}
@@ -231,6 +240,10 @@
   </div>
 </div>
 
+<div id="preview-modal" hidden>
+  <div class="preview-card" id="preview-card"></div>
+</div>
+
 <script type="module">
 import { upload } from "https://esm.sh/@vercel/blob/client";
 
@@ -295,9 +308,10 @@ function renderMedia(){
     tile.className = "media-tile" + (item.id === state.selectedMediaId ? " selected" : "");
     tile.innerHTML = mediaThumbHtml(item) +
       '<span class="kind-badge">' + item.kind + '</span>' +
-      '<button type="button" class="del-btn" title="Delete" data-id="' + item.id + '">×</button>';
+      '<button type="button" class="del-btn" title="Delete" data-id="' + item.id + '">×</button>' +
+      '<button type="button" class="preview-btn" title="Preview">🔍</button>';
     tile.addEventListener("click", function(ev){
-      if (ev.target.classList.contains("del-btn")) return;
+      if (ev.target.classList.contains("del-btn") || ev.target.classList.contains("preview-btn")) return;
       selectMedia(item.id);
     });
     tile.querySelector(".del-btn").addEventListener("click", function(ev){
@@ -307,6 +321,10 @@ function renderMedia(){
         if (state.selectedMediaId === item.id) selectMedia(null);
         return refreshMedia();
       }).catch(function(err){ alert("Couldn't delete: " + err.message); });
+    });
+    tile.querySelector(".preview-btn").addEventListener("click", function(ev){
+      ev.stopPropagation();
+      openPreview(item);
     });
     grid.appendChild(tile);
   });
@@ -329,10 +347,34 @@ function renderComposer(){
   }
   hint.hidden = true;
   composer.classList.add("open");
-  document.getElementById("composer-preview").innerHTML = mediaThumbHtml(item);
+  document.getElementById("composer-preview").innerHTML = mediaThumbHtml(item) +
+    '<button type="button" class="preview-btn" title="Preview">🔍</button>';
+  document.getElementById("composer-preview").querySelector(".preview-btn").addEventListener("click", function(){
+    openPreview(item);
+  });
   document.getElementById("composer-result").textContent = "";
   document.getElementById("composer-result").className = "composer-status";
 }
+
+function openPreview(item){
+  var card = document.getElementById("preview-card");
+  var mediaHtml = item.kind === "video"
+    ? '<video src="' + item.url + '" controls playsinline autoplay></video>'
+    : '<img src="' + item.url + '" alt="">';
+  card.innerHTML = mediaHtml + '<button type="button" class="btn btn-ghost btn-sm" id="preview-close" style="color:#fff;border-color:#fff;">Close</button>';
+  card.querySelector("#preview-close").addEventListener("click", closePreview);
+  document.getElementById("preview-modal").hidden = false;
+}
+function closePreview(){
+  document.getElementById("preview-modal").hidden = true;
+  document.getElementById("preview-card").innerHTML = "";
+}
+document.getElementById("preview-modal").addEventListener("click", function(ev){
+  if (ev.target.id === "preview-modal") closePreview();
+});
+document.addEventListener("keydown", function(ev){
+  if (ev.key === "Escape" && !document.getElementById("preview-modal").hidden) closePreview();
+});
 
 function updateSubmitLabel(){
   var later = document.getElementById("when-later").checked;

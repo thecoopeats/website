@@ -62,7 +62,7 @@
   .dropzone{border:var(--stroke-2) dashed var(--border-hard);border-radius:var(--radius-md);padding:28px 16px;text-align:center;cursor:pointer;color:var(--text-muted);font-size:var(--text-xs);transition:background .1s ease;}
   .dropzone.drag{background:var(--status-scheduled-bg);}
   .upload-rows{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
-  .upload-row{display:flex;align-items:center;gap:8px;font-size:var(--text-2xs);}
+  .upload-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-size:var(--text-2xs);}
   .upload-row .bar{flex:1;height:6px;border-radius:3px;background:var(--gray-100,#eee);overflow:hidden;}
   .upload-row .bar > i{display:block;height:100%;background:var(--coop-red);width:0%;transition:width .15s ease;}
   .upload-row.error .bar{background:var(--status-failed-bg);}
@@ -734,6 +734,13 @@ function openCropModal(file, dim){
   });
 }
 
+function withTimeout(promise, ms, message){
+  return new Promise(function(resolve, reject){
+    var timer = setTimeout(function(){ reject(new Error(message)); }, ms);
+    promise.then(function(v){ clearTimeout(timer); resolve(v); }, function(e){ clearTimeout(timer); reject(e); });
+  });
+}
+
 function uploadOne(file){
   var row = document.createElement("div");
   row.className = "upload-row";
@@ -742,7 +749,10 @@ function uploadOne(file){
   var bar = row.querySelector("i");
   var pct = row.querySelector(".pct");
 
-  upload(file.name, file, {
+  // Large videos over a slow mobile connection can legitimately take a
+  // while, but this still has to resolve one way or the other eventually
+  // rather than leave the row stuck at 0% forever with no explanation.
+  var uploadPromise = upload(file.name, file, {
     access: "public",
     handleUploadUrl: "/api/social-upload-token",
     clientPayload: JSON.stringify({ key: passKey, filename: file.name }),
@@ -753,14 +763,19 @@ function uploadOne(file){
   }).then(function(blob){
     blob.filename = file.name;
     return registerMedia(blob);
-  }).then(function(){
+  });
+
+  withTimeout(uploadPromise, 180000, "Timed out after 3 minutes — check your connection and try again.").then(function(){
     pct.textContent = "done";
     setTimeout(function(){ row.remove(); }, 1200);
     refreshMedia();
   }).catch(function(err){
     row.classList.add("error");
     pct.textContent = "failed";
-    row.title = err.message;
+    var msgEl = document.createElement("div");
+    msgEl.style.cssText = "flex-basis:100%;color:var(--coop-red);font-size:11px;";
+    msgEl.textContent = err && err.message ? err.message : String(err);
+    row.appendChild(msgEl);
   });
 }
 

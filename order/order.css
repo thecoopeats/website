@@ -88,8 +88,9 @@ h1 { font-size: 36px; color: var(--red); margin: 8px 0 16px; }
 .secondary { background: #fff; border: 2px solid var(--black); border-radius: 12px; padding: 14px 18px; font-weight: 700; margin-top: 16px; }
 .payment { background: #fff; border-radius: 12px; padding: 14px; margin: 14px 0; }
 
+body.sheet-open { overflow: hidden; }
 .overlay { position: fixed; inset: 0; background: rgba(10, 10, 10, 0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
-.sheet { background: #fff; width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); }
+.sheet { background: #fff; width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-radius: 18px 18px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); }
 @media (min-width: 700px) { .overlay { align-items: center; } .sheet { border-radius: 18px; } }
 .sheet-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
 .sheet-head h2 { font-size: 28px; color: var(--red); }

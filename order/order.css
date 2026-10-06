@@ -1,0 +1,116 @@
+/* thecoopeats.com/order. Uses the website's tokens from /styles.css (colors, fonts),
+   with fallbacks so the page still reads right if they don't load. */
+:root {
+  --red: var(--coop-red, #c8252b);
+  --red-dark: var(--coop-red-dark, #9c1a1f);
+  --black: var(--coop-black, #0a0a0a);
+  --ink: var(--coop-ink, #141414);
+  --paper: var(--gray-50, #f7f5f3);
+  --line: var(--gray-200, #d8d3cd);
+  --muted: var(--gray-600, #5c5852);
+  --poster: var(--font-poster, 'Luckiest Guy', Impact, system-ui, sans-serif);
+  --body: var(--font-body, 'Quicksand', system-ui, sans-serif);
+  --mono: var(--font-mono, 'Roboto Mono', ui-monospace, monospace);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-weight: 500; line-height: 1.45; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 3px solid var(--coop-red-bright, #e4252c); outline-offset: 2px; }
+
+.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--black); color: #fff; }
+.logo { height: 44px; display: block; }
+.top-text { flex: 1; min-width: 0; }
+.kicker { font-family: var(--poster); letter-spacing: 0.06em; font-size: 18px; color: inherit; }
+.where { font-size: 14px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill { font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.pill.open { background: #1e8e3e; }
+.pill.closed { background: var(--red); }
+.pill.preview { background: #b26a00; }
+.preview-note { background: #b26a00; color: #fff; font-weight: 700; padding: 12px 16px; border-radius: 12px; margin-bottom: 12px; }
+.as-link { display: block; text-decoration: none; text-align: center; margin-top: 16px; }
+
+.wrap { max-width: 960px; margin: 0 auto; padding: 16px 16px 120px; }
+.wrap.narrow { max-width: 640px; }
+.center { text-align: center; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.error { color: var(--red); font-weight: 700; }
+.closed { background: var(--red); color: #fff; font-weight: 700; padding: 14px 16px; border-radius: 12px; margin-bottom: 12px; }
+
+h1, h2 { font-family: var(--poster); font-weight: 400; letter-spacing: 0.02em; margin: 0; }
+h1 { font-size: 36px; color: var(--red); margin: 8px 0 16px; }
+.cat h2 { font-size: 30px; color: var(--red); margin: 24px 0 12px; scroll-margin-top: 120px; }
+
+.cats { position: sticky; top: 64px; z-index: 4; display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; background: var(--paper); }
+.cats a { flex: none; font-family: var(--poster); letter-spacing: 0.04em; text-decoration: none; color: var(--ink); background: #fff; border: 2px solid var(--black); border-radius: 999px; padding: 6px 14px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.item { display: flex; flex-direction: column; gap: 6px; text-align: left; background: #fff; border: 2px solid var(--black); border-radius: 14px; padding: 14px; min-height: 120px; box-shadow: 4px 4px 0 var(--black); transition: transform 0.08s; }
+.item:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--black); }
+.item:disabled { opacity: 0.55; box-shadow: none; }
+.item-top { display: flex; justify-content: space-between; gap: 8px; }
+.item-name { font-family: var(--poster); font-size: 22px; letter-spacing: 0.02em; line-height: 1.05; }
+.item-desc { font-size: 14px; color: var(--muted); }
+.item-price { margin-top: auto; font-weight: 700; font-size: 18px; }
+.soldout .item-price { color: var(--red); }
+
+.cartbar { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; background: var(--red); color: #fff; border: 2px solid var(--black); border-radius: 14px; padding: 16px 18px; font-weight: 700; font-size: 18px; box-shadow: 4px 4px 0 var(--black); z-index: 6; }
+
+.back { background: none; border: 0; padding: 4px 0; color: var(--muted); font-weight: 700; }
+.line { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.line-main { flex: 1; min-width: 0; }
+.line-name { font-weight: 700; font-size: 18px; }
+.line-details { color: var(--muted); font-size: 14px; }
+.line-note { color: #b26a00; font-size: 14px; font-weight: 700; }
+.line-actions { display: flex; gap: 6px; margin-top: 6px; }
+.line-price { font-weight: 700; }
+.link { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-weight: 700; min-width: 36px; }
+.link.danger { color: var(--red); }
+
+.checkout { display: grid; gap: 14px; margin-top: 20px; }
+.checkout label, .note { display: grid; gap: 6px; font-weight: 700; }
+.checkout input, .checkout select, .note input { border: 2px solid var(--line); border-radius: 10px; padding: 12px; background: #fff; font-weight: 500; font-size: 16px; }
+.checkout small { font-weight: 500; color: var(--muted); }
+.tips { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.tips legend { font-weight: 700; margin-bottom: 6px; }
+.chip { border: 2px solid var(--black); border-radius: 999px; padding: 8px 14px; background: #fff; font-weight: 700; }
+.chip.on { background: var(--black); color: #fff; }
+.totals { display: grid; gap: 4px; background: #fff; border-radius: 12px; padding: 14px; }
+.totals div { display: flex; justify-content: space-between; }
+.totals .grand { font-weight: 700; font-size: 20px; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; }
+
+.primary { width: 100%; background: var(--red); color: #fff; border: 2px solid var(--black); border-radius: 12px; padding: 16px; font-weight: 700; font-size: 18px; box-shadow: 4px 4px 0 var(--black); }
+.primary:disabled { opacity: 0.5; box-shadow: none; }
+.secondary { background: #fff; border: 2px solid var(--black); border-radius: 12px; padding: 14px 18px; font-weight: 700; margin-top: 16px; }
+.payment { background: #fff; border-radius: 12px; padding: 14px; margin: 14px 0; }
+
+.overlay { position: fixed; inset: 0; background: rgba(10, 10, 10, 0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+.sheet { background: #fff; width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); }
+@media (min-width: 700px) { .overlay { align-items: center; } .sheet { border-radius: 18px; } }
+.sheet-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.sheet-head h2 { font-size: 28px; color: var(--red); }
+.x { background: var(--paper); border: 0; border-radius: 999px; width: 40px; height: 40px; font-size: 18px; }
+.group { border: 0; padding: 0; margin: 16px 0 0; }
+.group legend { font-weight: 700; font-size: 17px; }
+.group small { color: var(--muted); }
+.options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.opt-wrap { display: inline-flex; }
+.opt { display: grid; text-align: left; border: 2px solid var(--line); background: #fff; border-radius: 10px; padding: 10px 12px; font-weight: 700; min-width: 120px; }
+.opt small { font-weight: 500; color: var(--muted); }
+.opt.on { background: var(--black); border-color: var(--black); color: #fff; }
+.opt.on small { color: #ddd; }
+.opt.removal { background: var(--red); border-color: var(--red); }
+.opt:disabled { opacity: 0.4; }
+.opt-minus { border: 2px solid var(--line); border-left: 0; background: var(--paper); border-radius: 0 10px 10px 0; padding: 0 12px; font-weight: 700; font-size: 18px; margin-left: -6px; }
+.note { margin-top: 16px; }
+.sheet-foot { display: flex; gap: 12px; align-items: center; margin-top: 18px; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button { width: 44px; height: 48px; border: 2px solid var(--line); background: #fff; border-radius: 10px; font-size: 20px; font-weight: 700; }
+.stepper span { min-width: 30px; text-align: center; font-weight: 700; font-size: 18px; }
+
+.ticket { font-family: var(--mono); font-weight: 700; font-size: 88px; color: var(--red); line-height: 1; margin: 12px 0; }
+.big { font-size: 22px; font-weight: 700; }

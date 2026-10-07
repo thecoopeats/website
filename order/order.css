@@ -25,7 +25,6 @@ button:disabled { cursor: not-allowed; }
 .logo { height: 44px; display: block; }
 .top-text { flex: 1; min-width: 0; }
 .kicker { font-family: var(--poster); letter-spacing: 0.06em; font-size: 18px; color: inherit; }
-.where { font-size: 14px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill { font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
 .pill.open { background: #1e8e3e; }
 .pill.closed { background: var(--red); }
@@ -115,3 +114,9 @@ body.sheet-open { overflow: hidden; }
 
 .ticket { font-family: var(--mono); font-weight: 700; font-size: 88px; color: var(--red); line-height: 1; margin: 12px 0; }
 .big { font-size: 22px; font-weight: 700; }
+
+/* Pickup location, shown on every step. */
+.pickup-at { background: #111; color: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+.pickup-label { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; opacity: 0.75; }
+.pickup-place { font-size: 24px; font-weight: 900; line-height: 1.2; margin-top: 2px; }
+.pickup-link { display: inline-block; margin-top: 6px; font-size: 14px; color: #fff; opacity: 0.85; }

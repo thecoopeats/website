@@ -1316,10 +1316,24 @@
   });
 
   (function init(){
-    var saved = null;
-    try { saved = localStorage.getItem("spotcheck_key"); } catch(e){}
-    if (saved) tryLoad(saved);
-    else showGate("");
+    function normalStart(){
+      var saved = null;
+      try { saved = localStorage.getItem("spotcheck_key"); } catch(e){}
+      if (saved) tryLoad(saved);
+      else showGate("");
+    }
+    // Opened from the owner menu (admin.thecoopeats.com) with the owner's POS sign-in:
+    // take it out of the address bar right away, have the server check it, and unlock.
+    var m = location.hash.match(/[#&]owner=([^&]+)/);
+    if (!m) { normalStart(); return; }
+    history.replaceState(null, "", location.pathname + location.search);
+    fetch("/api/admin-unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool: "spotcheck", token: decodeURIComponent(m[1]) })
+    }).then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.key) tryLoad(d.key); else normalStart(); })
+      .catch(normalStart);
   })();
 })();
 </script>

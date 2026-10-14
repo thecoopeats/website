@@ -16,10 +16,10 @@ const CONTACT_EMAILJS_PUBLIC_KEY = 'yJXvhp4lNkX7RiOU_';
 
 function Hero({ onOrder, onMenu }) {
   return (
-    <section style={{ position: 'relative', borderBottom: '5px solid var(--coop-black)' }}>
-      <img src={AB + 'assets/food-nashville.jpg'} alt="The Nashville sandwich" style={{ width: '100%', height: 460, objectFit: 'cover', objectPosition: 'center 62%', display: 'block' }} />
+    <section style={{ position: 'relative', minHeight: 460, borderBottom: '5px solid var(--coop-black)', display: 'flex', alignItems: 'center' }}>
+      <img src={AB + 'assets/food-nashville.jpg'} alt="The Nashville sandwich" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 62%', display: 'block' }} />
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(10,10,10,.78) 0%,rgba(10,10,10,.45) 55%,transparent 100%)' }} />
-      <div style={{ position: 'absolute', inset: 0, display: 'grid', alignContent: 'center', gap: 'var(--space-4)', padding: '0 var(--gutter-page)', maxWidth: 'var(--max-content)' }}>
+      <div style={{ position: 'relative', width: '100%', display: 'grid', gap: 'var(--space-4)', padding: 'var(--space-6) var(--gutter-page)', maxWidth: 'var(--max-content)', margin: '0 auto' }}>
         <Badge tone="red">Truck is open · 11–8</Badge>
         <h1 style={{ ...POSTER, fontSize: 'var(--text-4xl)', color: '#fff', margin: 0, maxWidth: '16ch' }}>Fried chicken worth chasing down the block</h1>
         <p style={{ ...BODY, fontSize: 'var(--text-md)', color: '#fff', margin: 0, maxWidth: '46ch' }}>
@@ -37,7 +37,7 @@ function Hero({ onOrder, onMenu }) {
 function CateringBanner({ onCatering }) {
   return (
     <section style={{ background: 'var(--coop-black)', borderTop: '5px solid var(--coop-black)', borderBottom: '5px solid var(--coop-black)' }}>
-      <div style={{ maxWidth: 'var(--max-content)', margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,1fr)', alignItems: 'stretch' }}>
+      <div style={{ maxWidth: 'var(--max-content)', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', alignItems: 'stretch' }}>
         <div style={{ padding: 'var(--space-7) var(--gutter-page)', display: 'grid', alignContent: 'center', gap: 'var(--space-4)' }}>
           <Badge tone="red">Now booking 2026 dates</Badge>
           <h2 style={{ ...POSTER, fontSize: 'var(--text-3xl)', color: '#fff', margin: 0, maxWidth: '14ch' }}>Park the truck at your party</h2>
@@ -61,7 +61,7 @@ function Favorites({ items }) {
   return (
     <section style={{ maxWidth: 'var(--max-content)', margin: '0 auto', padding: 'var(--gutter-section) var(--gutter-page)' }}>
       <h2 style={{ ...POSTER, fontSize: 'var(--text-2xl)', color: 'var(--coop-red)', margin: '0 0 var(--space-5)' }}>Crowd favorites</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 'var(--space-5)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-5)' }}>
         {items.map(it => (
           <Card key={it.name} sticker hoverLift padding="0" style={{ overflow: 'hidden' }}>
             <img src={AB + it.photo} alt={it.name} style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block', borderBottom: '3px solid var(--coop-black)' }} />
@@ -88,9 +88,9 @@ function Gallery() {
     ['assets/food-nuggies.jpg', 'The Nuggies, honey bbq']
   ];
   return (
-    <section style={{ borderTop: '5px solid var(--coop-black)', borderBottom: '5px solid var(--coop-black)', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)' }}>
-      {shots.map(([src, alt], i) => (
-        <div key={src} style={{ position: 'relative', borderRight: i < 3 ? '3px solid var(--coop-black)' : 'none' }}>
+    <section style={{ borderTop: '5px solid var(--coop-black)', borderBottom: '5px solid var(--coop-black)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 3, background: 'var(--coop-black)' }}>
+      {shots.map(([src, alt]) => (
+        <div key={src} style={{ position: 'relative' }}>
           <img src={AB + src} alt={alt} style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }} />
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '28px 14px 12px', background: 'linear-gradient(transparent,rgba(10,10,10,.85))', ...POSTER, fontSize: 'var(--text-xs)', color: '#fff' }}>{alt}</div>
         </div>

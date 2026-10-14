@@ -4,3 +4,26 @@
 @import url("tokens/spacing.css");
 @import url("tokens/effects.css");
 @import url("tokens/motion.css");
+
+/* Catering page: content column next to a sticky estimate sidebar on
+   wider screens, stacked (and sidebar unstuck) below 760px. */
+.catering-layout {
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+}
+.catering-sidebar {
+  position: sticky;
+  top: var(--space-5);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+@media (max-width: 760px) {
+  .catering-layout {
+    grid-template-columns: 1fr;
+  }
+  .catering-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+

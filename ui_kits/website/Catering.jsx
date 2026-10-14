@@ -246,7 +246,7 @@ function Catering() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(320px,1fr)', gap: 'var(--space-7)', alignItems: 'start' }}>
+      <div className="catering-layout" style={{ display: 'grid', gap: 'var(--space-7)', alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
           <Card sticker>
             <h2 style={{ ...window.POSTER, fontSize: 'var(--text-lg)', margin: '0 0 4px' }}>1 · The party</h2>
@@ -296,7 +296,7 @@ function Catering() {
           </Card>
         </div>
 
-        <Card tone="board" sticker padding="var(--space-4)" style={{ position: 'sticky', top: 'var(--space-5)', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' }}>
+        <Card className="catering-sidebar" tone="board" sticker padding="var(--space-4)">
           <div style={{ ...window.POSTER, fontSize: 'var(--text-xl)', color: '#fff' }}>Your estimate</div>
           <div style={{ ...window.BODY, fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,.7)', marginBottom: 'var(--space-4)' }}>
             {guests} guests · {hours} hrs · {zoneMeta.label.toLowerCase()}

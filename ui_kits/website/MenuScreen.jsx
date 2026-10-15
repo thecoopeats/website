@@ -1,5 +1,5 @@
 const { MenuSection, MenuItem, Tabs, Button } = window.TheCoopDesignSystem_a9fb85;
-const ORDER_URL = 'https://order.tbdine.com/pickup/30439/menu';
+const ORDER_URL = '/order';
 
 const MENU = {
   entrees: [
@@ -30,7 +30,7 @@ function MenuScreen() {
         {MENU.sides.map(([n, p]) => <MenuItem key={n} name={n} price={p} />)}
       </MenuSection>}
       <div style={{ marginTop: 'var(--space-7)', display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
-        <Button as="a" href={ORDER_URL} target="_blank" rel="noopener" variant="primary" size="lg" iconRight={<span style={{ fontSize: '.8em' }}>↗</span>}>ORDER ONLINE</Button>
+        <Button as="a" href={ORDER_URL} variant="primary" size="lg">ORDER ONLINE</Button>
         <span style={{ ...window.BODY, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Pickup ordering is handled on TouchBistro — you'll leave this site.</span>
       </div>
     </section>

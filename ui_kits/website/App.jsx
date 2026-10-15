@@ -53,14 +53,14 @@ function App() {
     window.scrollTo(0, 0);
   }, [route]);
 
-  const order = () => window.open(ORDER_URL, '_blank', 'noopener');
+  const order = () => { window.location.href = ORDER_URL; };
 
   return (
     <div>
       <NavBar tone="red" assetBase="/" active={route}
         links={[{ value: 'home', label: 'Home' }, { value: 'menu', label: 'Menu' }, { value: 'find', label: 'Find us' }, { value: 'catering', label: 'Catering' }]}
         onNavigate={navigate}
-        cta={<Button as="a" href={ORDER_URL} target="_blank" rel="noopener" variant="dark" size="sm">ORDER ONLINE ↗</Button>} />
+        cta={<Button as="a" href={ORDER_URL} variant="dark" size="sm">ORDER ONLINE</Button>} />
 
       {route === 'home' && <>
         <Hero onOrder={order} onMenu={() => navigate('menu')} />

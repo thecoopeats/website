@@ -2127,7 +2127,7 @@ const {
   Tabs,
   Button
 } = window.TheCoopDesignSystem_a9fb85;
-const ORDER_URL = 'https://order.tbdine.com/pickup/30439/menu';
+const ORDER_URL = '/order';
 const MENU = {
   entrees: [['The Breakfast Sandwich', 8, 'egg, american cheese, bacon, hashbrown, and a touch of comeback sauce on a toasted challah bun', 0], ['The Nuggies', 8, 'eight bite-sized pieces of boneless chicken breast, freshly-battered, fried and tossed in your sauce of choice', 0], ['The Original', 12, 'fried chicken sandwich with coleslaw, pickles, and comeback sauce', 0], ['The Classic', 13, 'fried chicken sandwich with lettuce, tomato, pickles, and mayo', 0], ["The Cluckin'", 13, 'fried chicken sandwich with bacon, muenster cheese, and thousand island dressing', 0], ['The Buf-Mac-Wich', 13, 'fried chicken sandwich with buffalo sauce, mac & cheese, pickles, and comeback sauce', 1], ['The Hot Honey', 14, 'fried chicken sandwich with bacon, pepperjack cheese, hot honey, pickles and comeback sauce', 1], ['The Nashville', 14, 'fried chicken sandwich with nashville hot seasoning, bacon, coleslaw, pickles, and comeback sauce', 2]],
   sides: [['Clucked Fries', 15], ['Loaded Fries', 10], ['Cheese Fries', 7], ['Waffle Fries', 5], ['Fried Mac Bites', 7], ['Mac N Cheese', 5], ['Hashbrown', 2], ['Coleslaw', 4]]
@@ -2241,7 +2241,7 @@ const {
   IconButton
 } = window.TheCoopDesignSystem_a9fb85;
 const AB = '../../';
-const ORDER = 'https://order.tbdine.com/pickup/30439/menu';
+const ORDER = '/order';
 const MERCH = 'https://the-coop-8.creator-spring.com/';
 const EXT = /*#__PURE__*/React.createElement("span", {
   style: {

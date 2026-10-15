@@ -1,6 +1,6 @@
 const { NavBar, Button, Card, Badge, Logo, MenuSection, MenuItem, SauceChip, SAUCES, DashRule, Tabs, Input, Select, Checkbox, Radio, Switch, Stepper, Toast, Dialog, PriceTag, IconButton } = window.TheCoopDesignSystem_a9fb85;
 const AB = '/';
-const ORDER = 'https://order.tbdine.com/pickup/30439/menu';
+const ORDER = '/order';
 const MERCH = 'https://the-coop-8.creator-spring.com/';
 const EXT = <span style={{ fontSize: '.8em' }}>↗</span>;
 
@@ -26,7 +26,7 @@ function Hero({ onOrder, onMenu }) {
           Hand-battered sandwiches and nuggies, dipped in six truckmade sauces. We're playful about everything except the chicken.
         </p>
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <Button as="a" href={ORDER} target="_blank" rel="noopener" variant="primary" size="lg" iconRight={EXT}>ORDER ONLINE</Button>
+          <Button as="a" href={ORDER} variant="primary" size="lg">ORDER ONLINE</Button>
           <Button variant="light" size="lg" onClick={onMenu}>SEE THE MENU</Button>
         </div>
       </div>
@@ -71,7 +71,7 @@ function Favorites({ items }) {
               <PriceTag value={it.price} size="sm" />
             </div>
             <p style={{ ...BODY, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 16px' }}>{it.description}</p>
-            <Button as="a" href={ORDER} target="_blank" rel="noopener" variant="dark" size="sm" iconRight={EXT}>ORDER ONLINE</Button>
+            <Button as="a" href={ORDER} variant="dark" size="sm">ORDER ONLINE</Button>
             </div>
           </Card>
         ))}
@@ -191,7 +191,7 @@ function Footer() {
       <div style={{ maxWidth: 'var(--max-content)', margin: '0 auto', display: 'flex', justifyContent: 'space-between', gap: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
         <Logo variant="knockout" width={140} assetBase={AB} />
         <div style={{ display: 'flex', gap: 'var(--space-5)', flexWrap: 'wrap', alignItems: 'center' }}>
-          <a href={ORDER} target="_blank" rel="noopener" style={{ ...POSTER, fontSize: 'var(--text-xs)', color: '#fff', textDecoration: 'none', borderBottom: '3px solid var(--coop-red-bright)' }}>Order online ↗</a>
+          <a href={ORDER} style={{ ...POSTER, fontSize: 'var(--text-xs)', color: '#fff', textDecoration: 'none', borderBottom: '3px solid var(--coop-red-bright)' }}>Order online</a>
           <a href={MERCH} target="_blank" rel="noopener" style={{ ...POSTER, fontSize: 'var(--text-xs)', color: '#fff', textDecoration: 'none', borderBottom: '3px solid var(--coop-red-bright)' }}>Merch ↗</a>
           <span style={{ ...BODY, fontSize: 'var(--text-xs)', opacity: .85 }}>@thecoopeats · www.thecoopeats.com</span>
         </div>

@@ -85,6 +85,9 @@ h1 { font-size: 36px; color: var(--red); margin: 8px 0 16px; }
 .primary { width: 100%; background: var(--red); color: #fff; border: 2px solid var(--black); border-radius: 12px; padding: 16px; font-weight: 700; font-size: 18px; box-shadow: 4px 4px 0 var(--black); }
 .primary:disabled { opacity: 0.5; box-shadow: none; }
 .secondary { background: #fff; border: 2px solid var(--black); border-radius: 12px; padding: 14px 18px; font-weight: 700; margin-top: 16px; }
+.secondary.wide { width: 100%; }
+.order-type-choices { display: grid; gap: 12px; margin-top: 18px; }
+.order-type-choices button { margin-top: 0; font-size: 20px; padding: 20px; }
 .payment { background: #fff; border-radius: 12px; padding: 14px; margin: 14px 0; }
 
 body.sheet-open { overflow: hidden; }
